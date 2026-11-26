@@ -189,23 +189,39 @@ namespace Mammoth.EditorTools
             }
         }
 
-        /// <summary>A low mountain range flanking both sides of the track, further
-        /// out and taller than the iceberg field, so the lanes feel like a valley
-        /// instead of running out into empty gray. Snow caps are separate small
-        /// props (not scaled children) so they keep a rounded, cap-like shape
-        /// instead of stretching with the mountain's tall, non-uniform scale.</summary>
+        // A handful of fixed tint blends so MakeMaterial's cache is reused across
+        // hundreds of mountains instead of baking a unique .mat asset per peak.
+        static readonly float[] MountainTints = { 0f, 0.12f, 0.22f, 0.35f };
+
+        /// <summary>A continuous mountain wall flanking both sides of the track,
+        /// built as two overlapping rows (near/low, far/tall) per side so there are
+        /// no sky gaps between peaks, closing the "empty valley" look. Snow caps are
+        /// separate small props (not scaled children) so they keep a rounded,
+        /// cap-like shape instead of stretching with the mountain's tall,
+        /// non-uniform scale.</summary>
         static void BuildMountains(float lane)
         {
             var field = new GameObject("Mountains");
-            var rng = new System.Random(29);
-            for (int i = 0; i < 34; i++)
+            int seed = 0;
+            foreach (int side in new[] { -1, 1 })
             {
-                int side = i % 2 == 0 ? -1 : 1;
-                float x = side * (lane * 6f + (float)rng.NextDouble() * lane * 5f);
-                float z = (float)rng.NextDouble() * 520f;
-                float heightScale = Mathf.Lerp(9f, 22f, (float)rng.NextDouble());
-                float baseScale = Mathf.Lerp(5f, 10f, (float)rng.NextDouble());
-                var basePos = new Vector3(x, heightScale * 0.3f - 1f, z);
+                BuildMountainRow(field, side, lane * 5.2f, step: 9f, heightMin: 9f, heightMax: 20f, baseMin: 6f, baseMax: 10f, ref seed);
+                BuildMountainRow(field, side, lane * 8.5f, step: 12f, heightMin: 14f, heightMax: 28f, baseMin: 8f, baseMax: 14f, ref seed);
+            }
+        }
+
+        static void BuildMountainRow(GameObject field, int side, float rowDistance, float step,
+            float heightMin, float heightMax, float baseMin, float baseMax, ref int seed)
+        {
+            var rng = new System.Random(seed * 97 + 29);
+            float z = -10f;
+            while (z < 515f)
+            {
+                float x = side * (rowDistance + ((float)rng.NextDouble() - 0.5f) * step * 1.6f);
+                float zPos = z + ((float)rng.NextDouble() - 0.5f) * step * 0.6f;
+                float heightScale = Mathf.Lerp(heightMin, heightMax, (float)rng.NextDouble());
+                float baseScale = Mathf.Lerp(baseMin, baseMax, (float)rng.NextDouble());
+                var basePos = new Vector3(x, heightScale * 0.3f - 1f, zPos);
 
                 var go = new GameObject("Mountain");
                 go.transform.SetParent(field.transform);
@@ -215,8 +231,8 @@ namespace Mammoth.EditorTools
 
                 var mf = go.AddComponent<MeshFilter>();
                 var mr = go.AddComponent<MeshRenderer>();
-                mf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 71 + 13, jitter: 0.3f, subdivisions: 1);
-                mr.sharedMaterial = MakeMaterial(Color.Lerp(MountainRock, Ice3, (float)rng.NextDouble() * 0.35f));
+                mf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(seed * 71 + 13, jitter: 0.3f, subdivisions: 1);
+                mr.sharedMaterial = MakeMaterial(Color.Lerp(MountainRock, Ice3, MountainTints[rng.Next(MountainTints.Length)]));
 
                 var cap = new GameObject("Snow Cap");
                 cap.transform.SetParent(field.transform, false);
@@ -225,8 +241,11 @@ namespace Mammoth.EditorTools
                 cap.transform.localScale = Vector3.one * (baseScale * 0.4f);
                 var cmf = cap.AddComponent<MeshFilter>();
                 var cmr = cap.AddComponent<MeshRenderer>();
-                cmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 113 + 41, jitter: 0.25f, subdivisions: 0);
+                cmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(seed * 113 + 41, jitter: 0.25f, subdivisions: 0);
                 cmr.sharedMaterial = MakeMaterial(SnowWhite);
+
+                seed++;
+                z += step;
             }
         }
 
