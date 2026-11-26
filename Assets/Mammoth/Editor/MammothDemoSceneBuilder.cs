@@ -30,7 +30,7 @@ namespace Mammoth.EditorTools
         static readonly Color MammothFur = new Color(0.90f, 0.78f, 0.62f);
         static readonly Color MammothFurShade = new Color(0.78f, 0.63f, 0.47f);
         static readonly Color TuskColor = new Color(0.98f, 0.96f, 0.9f);
-        static readonly Color MountainRock = new Color(0.40f, 0.50f, 0.60f);
+        static readonly Color MountainRock = new Color(0.30f, 0.40f, 0.50f);
         static readonly Color IceSlick = new Color(0.80f, 0.97f, 1f);
         static readonly Color MudColor = new Color(0.42f, 0.32f, 0.22f);
 
@@ -205,8 +205,10 @@ namespace Mammoth.EditorTools
             int seed = 0;
             foreach (int side in new[] { -1, 1 })
             {
-                BuildMountainRow(field, side, lane * 5.2f, step: 9f, heightMin: 9f, heightMax: 20f, baseMin: 6f, baseMax: 10f, ref seed);
-                BuildMountainRow(field, side, lane * 8.5f, step: 12f, heightMin: 14f, heightMax: 28f, baseMin: 8f, baseMax: 14f, ref seed);
+                // Pulled well back from the lane, and kept low, so the valley stays
+                // open and the track ahead is never blocked from the follow camera.
+                BuildMountainRow(field, side, lane * 9f, step: 11f, heightMin: 6f, heightMax: 12f, baseMin: 5f, baseMax: 8f, ref seed);
+                BuildMountainRow(field, side, lane * 14f, step: 15f, heightMin: 11f, heightMax: 22f, baseMin: 7f, baseMax: 12f, ref seed);
             }
         }
 
@@ -236,9 +238,9 @@ namespace Mammoth.EditorTools
 
                 var cap = new GameObject("Snow Cap");
                 cap.transform.SetParent(field.transform, false);
-                cap.transform.position = basePos + new Vector3(0, heightScale * 0.85f, 0);
+                cap.transform.position = basePos + new Vector3(0, heightScale * 0.72f, 0);
                 cap.transform.rotation = Quaternion.Euler(0, (float)rng.NextDouble() * 360f, 0);
-                cap.transform.localScale = Vector3.one * (baseScale * 0.4f);
+                cap.transform.localScale = Vector3.one * (baseScale * 0.62f);
                 var cmf = cap.AddComponent<MeshFilter>();
                 var cmr = cap.AddComponent<MeshRenderer>();
                 cmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(seed * 113 + 41, jitter: 0.25f, subdivisions: 0);
