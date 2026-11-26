@@ -88,7 +88,7 @@ namespace Mammoth.EditorTools
             RenderSettings.fogStartDistance = 18f;
             RenderSettings.fogEndDistance = 90f;
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = Color.Lerp(SkyTop, SnowWhite, 0.5f);
+            RenderSettings.ambientLight = Color.Lerp(SkyTop, SnowWhite, 0.2f);
         }
 
         static void SetupLighting()
@@ -101,7 +101,7 @@ namespace Mammoth.EditorTools
             }
             var light = sun.GetComponent<Light>();
             light.color = new Color(1f, 0.97f, 0.92f);
-            light.intensity = 1.05f;
+            light.intensity = 0.75f;
             sun.transform.rotation = Quaternion.Euler(48f, -25f, 0f);
         }
 
