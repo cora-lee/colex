@@ -1,0 +1,226 @@
+{
+  "format": "mammoth-mapping-handoff",
+  "version": 3,
+  "exportedAtUtc": "2026-11-26T21:23:59.663498+00:00",
+  "settingsRevision": "a74d9e1e785f",
+  "stage": "prototype; three-person validation pending; Unity integration not implemented",
+  "roles": {
+    "left": "speed",
+    "center": "direction",
+    "right": "jump_and_grab"
+  },
+  "coordinateSystem": "mirrored image, x right, y down",
+  "settings": {
+    "confidence": 0.55,
+    "margin": 0.025,
+    "calibration": 3.0,
+    "speed_low": -0.8,
+    "speed_high": 1.0,
+    "smooth": 0.3,
+    "min_speed": 2.0,
+    "max_speed": 12.0,
+    "hand_trigger": 0.15,
+    "hand_reset": -0.15,
+    "lane_width": 2.0,
+    "lane_time": 0.25,
+    "jump_hand_trigger": 0.8,
+    "jump_hand_reset": -0.15,
+    "clap_close": 0.35,
+    "clap_open": 0.9,
+    "clap_cooldown": 0.35,
+    "jump_duration": 0.9,
+    "jump_height": 1.5
+  },
+  "parameters": [
+    {
+      "key": "confidence",
+      "group": "Tracking",
+      "label": "Landmark confidence",
+      "default": 0.55,
+      "minimum": 0.1,
+      "maximum": 0.99,
+      "step": 0.01,
+      "meaning": "Minimum visibility and presence for required joints."
+    },
+    {
+      "key": "margin",
+      "group": "Tracking",
+      "label": "Boundary margin",
+      "default": 0.025,
+      "minimum": 0,
+      "maximum": 0.12,
+      "step": 0.005,
+      "meaning": "Fraction of image width excluded on each side of section dividers."
+    },
+    {
+      "key": "calibration",
+      "group": "Tracking",
+      "label": "Calibration duration (s)",
+      "default": 3,
+      "minimum": 1,
+      "maximum": 15,
+      "step": 0.5,
+      "meaning": "All three regions must stay visible for this long."
+    },
+    {
+      "key": "speed_low",
+      "group": "Speed",
+      "label": "Low hand height",
+      "default": -0.8,
+      "minimum": -3,
+      "maximum": 3,
+      "step": 0.05,
+      "meaning": "(Shoulder Y \u2212 average wrist Y) / shoulder width. Maps to zero throttle."
+    },
+    {
+      "key": "speed_high",
+      "group": "Speed",
+      "label": "High hand height",
+      "default": 1.0,
+      "minimum": -3,
+      "maximum": 3,
+      "step": 0.05,
+      "meaning": "Same normalized measurement. Maps to full throttle."
+    },
+    {
+      "key": "smooth",
+      "group": "Speed",
+      "label": "Smoothing time (s)",
+      "default": 0.3,
+      "minimum": 0.02,
+      "maximum": 3,
+      "step": 0.01,
+      "meaning": "Higher = smoother but slower response."
+    },
+    {
+      "key": "min_speed",
+      "group": "Speed",
+      "label": "Minimum travel speed (units/s)",
+      "default": 2,
+      "minimum": 0,
+      "maximum": 30,
+      "step": 0.5,
+      "meaning": "Preview travel speed at zero throttle while tracked."
+    },
+    {
+      "key": "max_speed",
+      "group": "Speed",
+      "label": "Maximum travel speed (units/s)",
+      "default": 12,
+      "minimum": 0,
+      "maximum": 60,
+      "step": 0.5,
+      "meaning": "Preview travel speed at full throttle. Units are test-world units."
+    },
+    {
+      "key": "hand_trigger",
+      "group": "Direction",
+      "label": "Hand height to turn",
+      "default": 0.15,
+      "minimum": -0.5,
+      "maximum": 2,
+      "step": 0.05,
+      "meaning": "Raised wrist above its shoulder, divided by shoulder width; mirrored screen-left hand turns left."
+    },
+    {
+      "key": "hand_reset",
+      "group": "Direction",
+      "label": "Hand height to rearm",
+      "default": -0.15,
+      "minimum": -2,
+      "maximum": 1,
+      "step": 0.05,
+      "meaning": "Both wrists must return below this normalized height before another turn."
+    },
+    {
+      "key": "lane_width",
+      "group": "Direction",
+      "label": "Lane spacing (units)",
+      "default": 2,
+      "minimum": 0.5,
+      "maximum": 5,
+      "step": 0.1,
+      "meaning": "Distance between adjacent test-world lanes."
+    },
+    {
+      "key": "lane_time",
+      "group": "Direction",
+      "label": "Lane transition time (s)",
+      "default": 0.25,
+      "minimum": 0.05,
+      "maximum": 2,
+      "step": 0.05,
+      "meaning": "How quickly the preview moves into the next lane."
+    },
+    {
+      "key": "jump_hand_trigger",
+      "group": "Jump",
+      "label": "Both-hand height to jump",
+      "default": 0.8,
+      "minimum": 0.2,
+      "maximum": 2,
+      "step": 0.05,
+      "meaning": "Each wrist must be this far above its own shoulder, divided by shoulder width."
+    },
+    {
+      "key": "jump_hand_reset",
+      "group": "Jump",
+      "label": "Both-hand height to rearm jump",
+      "default": -0.15,
+      "minimum": -2,
+      "maximum": 0.5,
+      "step": 0.05,
+      "meaning": "Both wrists must lower below this shoulder-relative height after the animation lands before another jump."
+    },
+    {
+      "key": "clap_close",
+      "group": "Jump",
+      "label": "Hand distance to grab",
+      "default": 0.35,
+      "minimum": 0.1,
+      "maximum": 1.2,
+      "step": 0.05,
+      "meaning": "Wrist distance divided by shoulder width. A grab triggers when hands move from apart to this distance or closer."
+    },
+    {
+      "key": "clap_open",
+      "group": "Jump",
+      "label": "Hand distance to rearm grab",
+      "default": 0.9,
+      "minimum": 0.3,
+      "maximum": 2,
+      "step": 0.05,
+      "meaning": "Separate wrists to at least this normalized distance before another grab."
+    },
+    {
+      "key": "clap_cooldown",
+      "group": "Jump",
+      "label": "Minimum time between grabs (s)",
+      "default": 0.35,
+      "minimum": 0.1,
+      "maximum": 2,
+      "step": 0.05,
+      "meaning": "Reject another grab until this time has elapsed and hands have separated."
+    },
+    {
+      "key": "jump_duration",
+      "group": "Jump",
+      "label": "Air time (s)",
+      "default": 0.9,
+      "minimum": 0.2,
+      "maximum": 3,
+      "step": 0.05,
+      "meaning": "Duration of one fixed parabolic jump."
+    },
+    {
+      "key": "jump_height",
+      "group": "Jump",
+      "label": "Peak jump height (units)",
+      "default": 1.5,
+      "minimum": 0.1,
+      "maximum": 5,
+      "step": 0.1,
+      "meaning": "Peak height of the preview jump in test-world units."
+    }
+  ]
+}

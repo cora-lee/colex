@@ -1,0 +1,21 @@
+{
+  "confidence": 0.55,
+  "margin": 0.025,
+  "calibration": 3.0,
+  "speed_low": -0.8,
+  "speed_high": 1.0,
+  "smooth": 0.3,
+  "min_speed": 2.0,
+  "max_speed": 12.0,
+  "hand_trigger": 0.15,
+  "hand_reset": -0.15,
+  "lane_width": 2.0,
+  "lane_time": 0.25,
+  "jump_hand_trigger": 0.8,
+  "jump_hand_reset": -0.15,
+  "clap_close": 0.35,
+  "clap_open": 0.9,
+  "clap_cooldown": 0.35,
+  "jump_duration": 0.9,
+  "jump_height": 1.5
+}
