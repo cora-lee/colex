@@ -7,6 +7,7 @@
 import { FilesetResolver, PoseLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 
 const UNITY_URL = "http://127.0.0.1:8765/state";
+const FRAME_URL = "http://127.0.0.1:8765/frame";
 const SETTINGS_URL = "../Assets/StreamingAssets/MammothMapping/settings.json"; // single source of truth with Unity
 
 const DEFAULTS = {
@@ -28,6 +29,14 @@ const calibrateBtn = document.getElementById("calibrateBtn");
 const video = document.getElementById("video");
 const overlay = document.getElementById("overlay");
 const ctx2d = overlay.getContext("2d");
+
+// Small off-screen canvas used only to downscale a thumbnail for Unity's
+// bottom-right camera-preview overlay (Mammoth > ... > MammothCameraPreview).
+// Kept separate from the visible <video>/<canvas> pair above.
+const frameCanvas = document.createElement("canvas");
+frameCanvas.width = 220;
+frameCanvas.height = 165;
+const frameCtx = frameCanvas.getContext("2d");
 
 function log(msg) { statusEl.textContent = msg; }
 
@@ -219,6 +228,7 @@ async function start(cfg, mapping) {
   log("보정 중… 세 영역(왼쪽/가운데/오른쪽)에 각자 서서 양손을 내리고 가만히 계세요.");
 
   let lastSend = 0;
+  let lastFrameSend = 0;
   function frame(tsMs) {
     const now = performance.now() / 1000;
     const result = landmarker.detectForVideo(video, tsMs);
@@ -236,6 +246,13 @@ async function start(cfg, mapping) {
     if (tsMs - lastSend > 1000 / 30) {
       lastSend = tsMs;
       sendToUnity(state);
+    }
+    // Thumbnail for Unity's in-game camera preview goes over separately, at a
+    // much lower rate (5 fps) — it's just for the player to glance at, not for
+    // gesture recognition, so there's no reason to burden /state with it.
+    if (tsMs - lastFrameSend > 1000 / 5) {
+      lastFrameSend = tsMs;
+      sendFrameToUnity();
     }
     video.requestVideoFrameCallback ? video.requestVideoFrameCallback((_, meta) => frame(meta.mediaTime * 1000)) : requestAnimationFrame(frame);
   }
@@ -287,6 +304,20 @@ function updateHud(obs, state, mapping) {
 function cfgCountdown(mapping) {
   if (!mapping.samples.length) return mapping.cfg.calibration;
   return mapping.cfg.calibration - (mapping.samples[mapping.samples.length - 1][0] - mapping.samples[0][0]);
+}
+
+function sendFrameToUnity() {
+  // Mirror it, same as the on-screen <video>, so the preview in the corner of
+  // the actual game looks the same way round the player already sees it.
+  frameCtx.save();
+  frameCtx.translate(frameCanvas.width, 0);
+  frameCtx.scale(-1, 1);
+  frameCtx.drawImage(video, 0, 0, frameCanvas.width, frameCanvas.height);
+  frameCtx.restore();
+  frameCanvas.toBlob(blob => {
+    if (!blob) return;
+    fetch(FRAME_URL, { method: "POST", headers: { "Content-Type": "image/jpeg" }, body: blob }).catch(() => { /* best-effort */ });
+  }, "image/jpeg", 0.5);
 }
 
 let unityOk = false;

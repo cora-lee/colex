@@ -63,6 +63,8 @@ namespace Mammoth.EditorTools
             var hud = systems.AddComponent<MammothDebugHud>();
             hud.receiver = receiver;
             hud.controller = controller;
+            var camPreview = systems.AddComponent<MammothCameraPreview>();
+            camPreview.receiver = receiver;
 
             SetupLighting();
 

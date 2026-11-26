@@ -57,9 +57,19 @@ namespace Mammoth
         public int Lane => Tracker.Lane;
         public string Status { get; private set; } = "starting";
 
+        /// <summary>Latest camera-preview JPEG the browser page POSTed to /frame, or
+        /// null if none has arrived yet. Bump-free to read: byte[] reference
+        /// assignment is atomic, and FrameVersion tells a reader whether it's new.</summary>
+        public byte[] LatestFrameJpeg => latestFrame;
+        /// <summary>Increments every time a new /frame POST lands, so a consumer
+        /// (MammothCameraPreview) only re-decodes the JPEG when it actually changed.</summary>
+        public int FrameVersion => frameVersion;
+
         HttpListener listener;
         readonly ConcurrentQueue<string> incoming = new ConcurrentQueue<string>();
         volatile string listenError;
+        volatile byte[] latestFrame;
+        int frameVersion;
 
         void OnEnable()
         {
@@ -218,6 +228,29 @@ namespace Mammoth
                 }
 
                 string path = ctx.Request.Url.AbsolutePath.TrimEnd('/');
+
+                // Small camera-preview thumbnails (bottom-right corner overlay in
+                // Unity) land here as raw JPEG bytes, separate from /state so the
+                // 30 Hz gesture JSON never has to carry image data.
+                if (path == "/frame")
+                {
+                    if (ctx.Request.HttpMethod == "POST")
+                    {
+                        using var ms = new System.IO.MemoryStream();
+                        ctx.Request.InputStream.CopyTo(ms);
+                        latestFrame = ms.ToArray();
+                        System.Threading.Interlocked.Increment(ref frameVersion);
+                        var bytes = Encoding.UTF8.GetBytes("{\"ok\":true}");
+                        ctx.Response.ContentType = "application/json";
+                        ctx.Response.OutputStream.Write(bytes, 0, bytes.Length);
+                    }
+                    else
+                    {
+                        ctx.Response.StatusCode = 405;
+                    }
+                    return;
+                }
+
                 if (path != "/state")
                 {
                     ctx.Response.StatusCode = 404;

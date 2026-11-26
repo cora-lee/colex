@@ -37,6 +37,12 @@ hands to jump and clap to grab.
   don't need to know which source is active.
 - Session handling, event counting (jumps/grabs), calibration and the team-mode gate
   all behave the same as the Python lab, because the logic is a direct port.
+- The page also POSTs a small mirrored JPEG thumbnail to `http://127.0.0.1:8765/frame`
+  about 5 times/second. `MammothStateReceiver` stores the latest one, and
+  `MammothCameraPreview` draws it as a small overlay in the bottom-right corner of the
+  actual Unity game screen, so players can see their own tracking without it covering
+  the route. This is separate traffic from `/state` so the 30 Hz gesture JSON never
+  carries image data.
 
 ## Switching back to the Python lab
 
