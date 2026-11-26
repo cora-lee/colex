@@ -25,11 +25,21 @@ namespace Mammoth
         [Tooltip("Allow keyboard testing without the lab: W/S speed, A/D lanes, Space jump, E grab.")]
         public bool keyboardFallback = true;
 
+        [Tooltip("Stretches of track (by forward distance) that slow the mammoth down or make it slide. Set by the scene builder.")]
+        public MammothTerrainSegment[] terrain = System.Array.Empty<MammothTerrainSegment>();
+        [Tooltip("Travel speed multiplier while inside a Mud segment.")]
+        public float mudSpeedFactor = 0.45f;
+        [Tooltip("Lateral slide amplitude (Unity units) while inside an Ice segment.")]
+        public float iceSlideAmplitude = 0.55f;
+        [Tooltip("How fast the ice slide oscillates.")]
+        public float iceSlideFrequency = 1.7f;
+
         public int Score { get; private set; }
         public int Jumps { get; private set; }
         public int GrabAttempts { get; private set; }
         public float LastGrabTime { get; private set; } = -100f;
         public bool LastGrabHit { get; private set; }
+        public MammothTerrainType CurrentTerrain { get; private set; }
 
         MammothSettings cfg;
         readonly MammothMotion motion = new MammothMotion();
@@ -83,10 +93,22 @@ namespace Mammoth
                 speed = 0f;
             }
 
-            distance += speed * worldScale * Time.deltaTime;
+            CurrentTerrain = SampleTerrain(distance);
+            float speedFactor = CurrentTerrain == MammothTerrainType.Mud ? mudSpeedFactor : 1f;
+            distance += speed * speedFactor * worldScale * Time.deltaTime;
+
             float x = motion.Lateral(lane, now, cfg) * worldScale;
+            if (CurrentTerrain == MammothTerrainType.Ice)
+                x += Mathf.Sin((float)now * iceSlideFrequency + distance * 0.05f) * iceSlideAmplitude;
             float y = motion.JumpOffset(now, cfg) * worldScale;
             transform.position = origin + new Vector3(x, y, distance);
+        }
+
+        MammothTerrainType SampleTerrain(float z)
+        {
+            for (int i = 0; i < terrain.Length; i++)
+                if (terrain[i].Contains(z)) return terrain[i].type;
+            return MammothTerrainType.Normal;
         }
 
         void ReadKeyboard()

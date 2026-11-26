@@ -17,17 +17,22 @@ namespace Mammoth.EditorTools
     {
         const string ScenePath = "Assets/Scenes/MammothDemo.unity";
 
-        // Pastel ice palette.
-        static readonly Color SkyTop = new Color(0.74f, 0.88f, 0.98f);
-        static readonly Color SkyHorizon = new Color(0.90f, 0.95f, 0.99f);
-        static readonly Color Ice1 = new Color(0.80f, 0.92f, 0.97f);
-        static readonly Color Ice2 = new Color(0.66f, 0.85f, 0.95f);
-        static readonly Color Ice3 = new Color(0.55f, 0.78f, 0.93f);
-        static readonly Color SnowWhite = new Color(0.97f, 0.99f, 1f);
+        // Pastel ice palette. Floor/berg tones are kept clearly darker than the sky
+        // so the ground reads as ground instead of washing out to the same white as
+        // the background under direct light.
+        static readonly Color SkyTop = new Color(0.56f, 0.76f, 0.95f);
+        static readonly Color SkyHorizon = new Color(0.80f, 0.90f, 0.97f);
+        static readonly Color Ice1 = new Color(0.56f, 0.76f, 0.88f);
+        static readonly Color Ice2 = new Color(0.42f, 0.65f, 0.82f);
+        static readonly Color Ice3 = new Color(0.32f, 0.55f, 0.76f);
+        static readonly Color SnowWhite = new Color(0.95f, 0.97f, 1f);
         static readonly Color BlushPink = new Color(0.98f, 0.82f, 0.86f);
         static readonly Color MammothFur = new Color(0.90f, 0.78f, 0.62f);
         static readonly Color MammothFurShade = new Color(0.78f, 0.63f, 0.47f);
         static readonly Color TuskColor = new Color(0.98f, 0.96f, 0.9f);
+        static readonly Color MountainRock = new Color(0.40f, 0.50f, 0.60f);
+        static readonly Color IceSlick = new Color(0.80f, 0.97f, 1f);
+        static readonly Color MudColor = new Color(0.42f, 0.32f, 0.22f);
 
         [MenuItem("Mammoth/Create Demo Scene")]
         public static void Create()
@@ -41,6 +46,7 @@ namespace Mammoth.EditorTools
             SetupSkyAndFog();
             BuildIceFloor(lane);
             BuildIcebergField(lane);
+            BuildMountains(lane);
 
             var mammoth = BuildMammoth();
             var grabPoint = new GameObject("Grab Origin").transform;
@@ -53,6 +59,7 @@ namespace Mammoth.EditorTools
             var controller = mammoth.AddComponent<MammothController>();
             controller.receiver = receiver;
             controller.grabOrigin = grabPoint;
+            controller.terrain = BuildTerrainZones(lane);
             var hud = systems.AddComponent<MammothDebugHud>();
             hud.receiver = receiver;
             hud.controller = controller;
@@ -182,6 +189,76 @@ namespace Mammoth.EditorTools
             }
         }
 
+        /// <summary>A low mountain range flanking both sides of the track, further
+        /// out and taller than the iceberg field, so the lanes feel like a valley
+        /// instead of running out into empty gray. Snow caps are separate small
+        /// props (not scaled children) so they keep a rounded, cap-like shape
+        /// instead of stretching with the mountain's tall, non-uniform scale.</summary>
+        static void BuildMountains(float lane)
+        {
+            var field = new GameObject("Mountains");
+            var rng = new System.Random(29);
+            for (int i = 0; i < 34; i++)
+            {
+                int side = i % 2 == 0 ? -1 : 1;
+                float x = side * (lane * 6f + (float)rng.NextDouble() * lane * 5f);
+                float z = (float)rng.NextDouble() * 520f;
+                float heightScale = Mathf.Lerp(9f, 22f, (float)rng.NextDouble());
+                float baseScale = Mathf.Lerp(5f, 10f, (float)rng.NextDouble());
+                var basePos = new Vector3(x, heightScale * 0.3f - 1f, z);
+
+                var go = new GameObject("Mountain");
+                go.transform.SetParent(field.transform);
+                go.transform.position = basePos;
+                go.transform.rotation = Quaternion.Euler(0, (float)rng.NextDouble() * 360f, 0);
+                go.transform.localScale = new Vector3(baseScale, heightScale, baseScale);
+
+                var mf = go.AddComponent<MeshFilter>();
+                var mr = go.AddComponent<MeshRenderer>();
+                mf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 71 + 13, jitter: 0.3f, subdivisions: 1);
+                mr.sharedMaterial = MakeMaterial(Color.Lerp(MountainRock, Ice3, (float)rng.NextDouble() * 0.35f));
+
+                var cap = new GameObject("Snow Cap");
+                cap.transform.SetParent(field.transform, false);
+                cap.transform.position = basePos + new Vector3(0, heightScale * 0.85f, 0);
+                cap.transform.rotation = Quaternion.Euler(0, (float)rng.NextDouble() * 360f, 0);
+                cap.transform.localScale = Vector3.one * (baseScale * 0.4f);
+                var cmf = cap.AddComponent<MeshFilter>();
+                var cmr = cap.AddComponent<MeshRenderer>();
+                cmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 113 + 41, jitter: 0.25f, subdivisions: 0);
+                cmr.sharedMaterial = MakeMaterial(SnowWhite);
+            }
+        }
+
+        /// <summary>Alternating slick-ice (sideways slide) and mud (slowdown) patches
+        /// down the lane, for a more varied downhill run. Purely a distance lookup
+        /// in MammothController, no physics triggers needed.</summary>
+        static MammothTerrainSegment[] BuildTerrainZones(float lane)
+        {
+            var group = new GameObject("Terrain Zones");
+            var segs = new List<MammothTerrainSegment>();
+            float z = 50f;
+            bool ice = true;
+            while (z < 480f)
+            {
+                const float len = 20f;
+                var type = ice ? MammothTerrainType.Ice : MammothTerrainType.Mud;
+                segs.Add(new MammothTerrainSegment { startZ = z, endZ = z + len, type = type });
+
+                var patch = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                patch.name = ice ? "Ice Slick" : "Mud Patch";
+                Object.DestroyImmediate(patch.GetComponent<Collider>());
+                patch.transform.SetParent(group.transform);
+                patch.transform.position = new Vector3(0f, 0.016f, z + len * 0.5f);
+                patch.transform.localScale = new Vector3(lane * 3f + 1.6f, 0.02f, len);
+                patch.GetComponent<Renderer>().sharedMaterial = ice ? MakeSlickMaterial(IceSlick) : MakeMaterial(MudColor);
+
+                z += len + 25f;
+                ice = !ice;
+            }
+            return segs.ToArray();
+        }
+
         static GameObject BuildMammoth()
         {
             var mammoth = new GameObject("Mammoth");
@@ -259,6 +336,30 @@ namespace Mammoth.EditorTools
                 AssetDatabase.CreateAsset(m, path);
             }
             Materials[c] = m;
+            return m;
+        }
+
+        static readonly Dictionary<Color, Material> SlickMaterials = new Dictionary<Color, Material>();
+
+        /// <summary>A glossier material for the slick-ice patches, kept separate from
+        /// MakeMaterial's cache (and its flatter default smoothness) by name.</summary>
+        static Material MakeSlickMaterial(Color c)
+        {
+            if (SlickMaterials.TryGetValue(c, out var m) && m != null) return m;
+            string name = "Mammoth Slick " + ColorUtility.ToHtmlStringRGB(c);
+            string path = "Assets/Mammoth/Materials/" + name + ".mat";
+
+            m = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (m == null)
+            {
+                var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                m = new Material(shader) { name = name, color = c };
+                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.85f);
+                if (m.HasProperty("_Glossiness")) m.SetFloat("_Glossiness", 0.85f);
+                System.IO.Directory.CreateDirectory("Assets/Mammoth/Materials");
+                AssetDatabase.CreateAsset(m, path);
+            }
+            SlickMaterials[c] = m;
             return m;
         }
     }
