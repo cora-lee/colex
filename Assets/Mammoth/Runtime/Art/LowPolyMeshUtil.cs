@@ -110,5 +110,46 @@ namespace Mammoth.Art
             mesh.RecalculateBounds();
             return Flatten(mesh);
         }
+
+        /// <summary>
+        /// Builds a low-poly mountain peak: a flat, jittered-radius base ring at
+        /// local y=0 (so it sits flush with the ground with no gap underneath,
+        /// unlike the octahedron ice-chunk shape which tapers to a point at both
+        /// ends) tapering up to a single jittered apex at local y=1.
+        /// </summary>
+        public static Mesh BuildMountainPeak(int seed, float baseJitter = 0.3f, int sides = 7)
+        {
+            var rng = new System.Random(seed);
+            var verts = new System.Collections.Generic.List<Vector3> { Vector3.zero }; // [0] base center
+            var tris = new System.Collections.Generic.List<int>();
+
+            int ringStart = verts.Count;
+            for (int i = 0; i < sides; i++)
+            {
+                float angle = (i / (float)sides) * Mathf.PI * 2f;
+                float r = 1f + ((float)rng.NextDouble() * 2f - 1f) * baseJitter;
+                verts.Add(new Vector3(Mathf.Cos(angle) * r, 0f, Mathf.Sin(angle) * r));
+            }
+
+            float apexX = ((float)rng.NextDouble() * 2f - 1f) * 0.25f;
+            float apexZ = ((float)rng.NextDouble() * 2f - 1f) * 0.25f;
+            float apexY = 1f + ((float)rng.NextDouble() * 2f - 1f) * 0.15f;
+            int apexIdx = verts.Count;
+            verts.Add(new Vector3(apexX, apexY, apexZ));
+
+            for (int i = 0; i < sides; i++)
+            {
+                int a = ringStart + i;
+                int b = ringStart + (i + 1) % sides;
+                tris.Add(a); tris.Add(apexIdx); tris.Add(b); // side face, outward normal
+                tris.Add(0); tris.Add(a); tris.Add(b);       // base cap, downward normal
+            }
+
+            var mesh = new Mesh { name = "MountainPeak" };
+            mesh.vertices = verts.ToArray();
+            mesh.triangles = tris.ToArray();
+            mesh.RecalculateBounds();
+            return Flatten(mesh);
+        }
     }
 }

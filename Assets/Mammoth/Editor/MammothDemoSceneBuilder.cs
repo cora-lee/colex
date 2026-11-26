@@ -223,7 +223,10 @@ namespace Mammoth.EditorTools
                 float zPos = z + ((float)rng.NextDouble() - 0.5f) * step * 0.6f;
                 float heightScale = Mathf.Lerp(heightMin, heightMax, (float)rng.NextDouble());
                 float baseScale = Mathf.Lerp(baseMin, baseMax, (float)rng.NextDouble());
-                var basePos = new Vector3(x, heightScale * 0.3f - 1f, zPos);
+                // Flat-base mountain mesh sits at local y=0, so position.y just needs
+                // a tiny sink below the floor (y=0) to guarantee no sliver of gap
+                // shows between the rock and the ground, however the camera angles.
+                var basePos = new Vector3(x, -0.15f, zPos);
 
                 var go = new GameObject("Mountain");
                 go.transform.SetParent(field.transform);
@@ -233,12 +236,12 @@ namespace Mammoth.EditorTools
 
                 var mf = go.AddComponent<MeshFilter>();
                 var mr = go.AddComponent<MeshRenderer>();
-                mf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(seed * 71 + 13, jitter: 0.3f, subdivisions: 1);
+                mf.sharedMesh = LowPolyMeshUtil.BuildMountainPeak(seed * 71 + 13, baseJitter: 0.3f, sides: 7);
                 mr.sharedMaterial = MakeMaterial(Color.Lerp(MountainRock, Ice3, MountainTints[rng.Next(MountainTints.Length)]));
 
                 var cap = new GameObject("Snow Cap");
                 cap.transform.SetParent(field.transform, false);
-                cap.transform.position = basePos + new Vector3(0, heightScale * 0.72f, 0);
+                cap.transform.position = basePos + new Vector3(0, heightScale * 0.78f, 0);
                 cap.transform.rotation = Quaternion.Euler(0, (float)rng.NextDouble() * 360f, 0);
                 cap.transform.localScale = Vector3.one * (baseScale * 0.62f);
                 var cmf = cap.AddComponent<MeshFilter>();
