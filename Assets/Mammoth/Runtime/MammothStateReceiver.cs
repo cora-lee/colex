@@ -171,9 +171,11 @@ namespace Mammoth
             listenError = null;
             try
             {
+                // HttpListener prefixes must end with '/'. Register the root and
+                // filter by path in OnContext (accepts "/state" with or without a
+                // trailing slash) instead of registering "/state" without one.
                 listener = new HttpListener();
-                listener.Prefixes.Add($"http://127.0.0.1:{listenPort}/state/");
-                listener.Prefixes.Add($"http://127.0.0.1:{listenPort}/state");
+                listener.Prefixes.Add($"http://127.0.0.1:{listenPort}/");
                 listener.Start();
                 listener.BeginGetContext(OnContext, null);
                 Status = "listening on http://127.0.0.1:" + listenPort + "/state";
@@ -211,6 +213,14 @@ namespace Mammoth
                 if (ctx.Request.HttpMethod == "OPTIONS")
                 {
                     ctx.Response.StatusCode = 204;
+                    ctx.Response.Close();
+                    return;
+                }
+
+                string path = ctx.Request.Url.AbsolutePath.TrimEnd('/');
+                if (path != "/state")
+                {
+                    ctx.Response.StatusCode = 404;
                     ctx.Response.Close();
                     return;
                 }
