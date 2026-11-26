@@ -1,28 +1,48 @@
+using System;
 using System.Collections;
+using System.Collections.Concurrent;
+using System.Net;
+using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
 
 namespace Mammoth
 {
+    public enum MammothSourceMode
+    {
+        [InspectorName("Poll an external lab (Python)")] Poll,
+        [InspectorName("Listen for a browser page to push /state")] Listen,
+    }
+
     /// <summary>
-    /// Integration option B: polls the Python lab at http://127.0.0.1:8765/state
-    /// and exposes movement values plus one-shot OnJump / OnGrab events.
-    /// The lab must be running on the same computer (it binds to loopback only).
+    /// Feeds the shared MammothEventTracker from one of two sources:
+    ///
+    /// Poll (integration option B): polls an external process's /state endpoint
+    /// (the Python lab) over HTTP GET.
+    ///
+    /// Listen: Unity itself hosts the /state endpoint. A browser page running the
+    /// camera and the v3 gesture mapping in JavaScript (Web/) POSTs each state as
+    /// JSON to this endpoint instead of Unity polling anything. Loopback only.
     /// </summary>
     public class MammothStateReceiver : MonoBehaviour
     {
+        public MammothSourceMode mode = MammothSourceMode.Listen;
+
+        [Header("Poll mode")]
         [Tooltip("Python lab endpoint. Loopback only.")]
         public string url = "http://127.0.0.1:8765/state";
-
         [Tooltip("Requests per second.")]
         [Range(5, 60)] public float pollRate = 30f;
 
-        [Tooltip("Abort a request and treat tracking as lost after this many seconds without a fresh state.")]
+        [Header("Listen mode")]
+        [Tooltip("Port Unity listens on for the browser page's POST /state. Loopback only.")]
+        public int listenPort = 8765;
+
+        [Header("Common")]
+        [Tooltip("Abort a request / treat tracking as lost after this many seconds without a fresh state.")]
         public float receiveTimeout = 0.5f;
-
-        [Tooltip("Team game: only accept events when the lab is in 'team' mode.")]
+        [Tooltip("Team game: only accept events when the source reports mode 'team'.")]
         public bool requireTeamMode = true;
-
         public bool logEvents = true;
 
         static readonly System.Text.RegularExpressions.Regex NullNumbers =
@@ -37,33 +57,76 @@ namespace Mammoth
         public int Lane => Tracker.Lane;
         public string Status { get; private set; } = "starting";
 
+        HttpListener listener;
+        readonly ConcurrentQueue<string> incoming = new ConcurrentQueue<string>();
+        volatile string listenError;
+
         void OnEnable()
         {
             Tracker.OnJump += LogJump;
             Tracker.OnGrab += LogGrab;
             Tracker.OnSessionChanged += LogSession;
-            StartCoroutine(PollLoop());
+            Tracker.ReceiveTimeout = receiveTimeout;
+            Tracker.RequireTeamMode = requireTeamMode;
+
+            if (mode == MammothSourceMode.Poll) StartCoroutine(PollLoop());
+            else StartListening();
         }
 
         void OnDisable()
         {
             StopAllCoroutines();
+            StopListening();
             Tracker.OnJump -= LogJump;
             Tracker.OnGrab -= LogGrab;
             Tracker.OnSessionChanged -= LogSession;
             Tracker.Reset();
         }
 
+        void Update()
+        {
+            if (mode != MammothSourceMode.Listen) return;
+            Tracker.ReceiveTimeout = receiveTimeout;
+            Tracker.RequireTeamMode = requireTeamMode;
+
+            if (listenError != null)
+            {
+                Status = listenError;
+                return;
+            }
+
+            // Drain the queue but only act on the newest state this frame.
+            string latestJson = null;
+            while (incoming.TryDequeue(out var j)) latestJson = j;
+            if (latestJson == null)
+            {
+                if (!Tracker.Connected(Time.unscaledTimeAsDouble))
+                    Status = "waiting for the browser page to connect (http://127.0.0.1:" + listenPort + "/state)";
+                return;
+            }
+
+            string json = NullNumbers.Replace(latestJson, ":0");
+            MammothState s = null;
+            try { s = JsonUtility.FromJson<MammothState>(json); }
+            catch (Exception e) { Status = "bad JSON from browser: " + e.Message; }
+
+            if (s != null)
+            {
+                Tracker.Push(s, Time.unscaledTimeAsDouble);
+                Status = Tracker.LastRejectReason == "" ? "ok" : Tracker.LastRejectReason;
+            }
+        }
+
         void LogJump() { if (logEvents) Debug.Log("[Mammoth] jump"); }
         void LogGrab() { if (logEvents) Debug.Log("[Mammoth] grab"); }
         void LogSession(string id) { if (logEvents) Debug.Log("[Mammoth] new session " + id + " (counter baseline reset)"); }
+
+        // ---------------- Poll mode ----------------
 
         IEnumerator PollLoop()
         {
             while (true)
             {
-                Tracker.ReceiveTimeout = receiveTimeout;
-                Tracker.RequireTeamMode = requireTeamMode;
                 float started = Time.unscaledTime;
 
                 using (var req = UnityWebRequest.Get(url))
@@ -83,11 +146,9 @@ namespace Mammoth
                     else
                     {
                         MammothState s = null;
-                        // The lab sends null for untracked numbers; JsonUtility has no nullable floats,
-                        // so map them to 0 and rely on the *Tracked / *Ready flags.
                         string json = NullNumbers.Replace(req.downloadHandler.text, ":0");
                         try { s = JsonUtility.FromJson<MammothState>(json); }
-                        catch (System.Exception e) { Status = "bad JSON: " + e.Message; }
+                        catch (Exception e) { Status = "bad JSON: " + e.Message; }
 
                         if (s != null)
                         {
@@ -100,6 +161,89 @@ namespace Mammoth
                 float wait = 1f / Mathf.Max(1f, pollRate) - (Time.unscaledTime - started);
                 if (wait > 0) yield return new WaitForSecondsRealtime(wait);
                 else yield return null;
+            }
+        }
+
+        // ---------------- Listen mode ----------------
+
+        void StartListening()
+        {
+            listenError = null;
+            try
+            {
+                listener = new HttpListener();
+                listener.Prefixes.Add($"http://127.0.0.1:{listenPort}/state/");
+                listener.Prefixes.Add($"http://127.0.0.1:{listenPort}/state");
+                listener.Start();
+                listener.BeginGetContext(OnContext, null);
+                Status = "listening on http://127.0.0.1:" + listenPort + "/state";
+            }
+            catch (Exception e)
+            {
+                listenError = "could not open port " + listenPort + ": " + e.Message;
+                Debug.LogError("[Mammoth] " + listenError);
+            }
+        }
+
+        void StopListening()
+        {
+            try { listener?.Stop(); listener?.Close(); } catch { /* already gone */ }
+            listener = null;
+        }
+
+        void OnContext(IAsyncResult ar)
+        {
+            HttpListenerContext ctx;
+            try
+            {
+                if (listener == null || !listener.IsListening) return;
+                ctx = listener.EndGetContext(ar);
+                listener.BeginGetContext(OnContext, null); // keep accepting
+            }
+            catch { return; } // listener was stopped
+
+            try
+            {
+                ctx.Response.AddHeader("Access-Control-Allow-Origin", "*");
+                ctx.Response.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+                ctx.Response.AddHeader("Access-Control-Allow-Headers", "Content-Type");
+
+                if (ctx.Request.HttpMethod == "OPTIONS")
+                {
+                    ctx.Response.StatusCode = 204;
+                    ctx.Response.Close();
+                    return;
+                }
+
+                if (ctx.Request.HttpMethod == "POST")
+                {
+                    using var reader = new System.IO.StreamReader(ctx.Request.InputStream, ctx.Request.ContentEncoding ?? Encoding.UTF8);
+                    string body = reader.ReadToEnd();
+                    incoming.Enqueue(body);
+                    var bytes = Encoding.UTF8.GetBytes("{\"ok\":true}");
+                    ctx.Response.ContentType = "application/json";
+                    ctx.Response.OutputStream.Write(bytes, 0, bytes.Length);
+                }
+                else if (ctx.Request.HttpMethod == "GET")
+                {
+                    string json = Tracker.Latest == null ? "{}" : JsonUtility.ToJson(Tracker.Latest);
+                    var bytes = Encoding.UTF8.GetBytes(json);
+                    ctx.Response.ContentType = "application/json";
+                    ctx.Response.OutputStream.Write(bytes, 0, bytes.Length);
+                }
+                else
+                {
+                    ctx.Response.StatusCode = 405;
+                }
+            }
+            catch (Exception e)
+            {
+                try { ctx.Response.StatusCode = 500; } catch { /* response already gone */ }
+                Debug.LogWarning("[Mammoth] request handling error: " + e.Message);
+            }
+            finally
+            {
+                try { ctx.Response.Close(); } catch { /* already closed */ }
             }
         }
     }

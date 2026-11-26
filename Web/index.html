@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>Mammoth camera (browser gesture capture)</title>
+<style>
+  body { margin: 0; background: #0b1020; color: #eaf6ff; font-family: -apple-system, system-ui, sans-serif; }
+  #wrap { max-width: 920px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 18px; margin: 8px 0 4px; }
+  p.note { color: #9fb3c8; font-size: 13px; margin: 0 0 12px; }
+  #stage { position: relative; width: 100%; aspect-ratio: 4 / 3; background: #000; border-radius: 10px; overflow: hidden; }
+  video, canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  video { transform: scaleX(-1); } /* mirrored, matches "mirror image before inference" */
+  #hud { margin-top: 12px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-size: 13px; }
+  .zone { background: #121a30; border: 1px solid #27324d; border-radius: 8px; padding: 8px; }
+  .zone h3 { margin: 0 0 4px; font-size: 13px; }
+  .ok { color: #7cfc7c; } .warn { color: #ffd54a; } .bad { color: #ff7a7a; }
+  #status { margin-top: 10px; font-size: 13px; color: #cfe3f7; white-space: pre-wrap; }
+  button { background: #2a6df0; color: white; border: none; border-radius: 6px; padding: 8px 14px; font-size: 14px; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>Mammoth camera (brings v3 gestures from the browser into Unity)</h1>
+  <p class="note">
+    Left zone = speed, center zone = steer, right zone = jump + clap to grab.
+    Stand so all three regions are visible, then press Start and hold still through calibration.
+    This page must run from a local web server (not opened as a file), with the Unity scene in Play and its
+    MammothStateReceiver set to <b>Listen</b> mode.
+  </p>
+  <div id="stage">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+  </div>
+  <div style="margin-top:10px; display:flex; gap:8px; align-items:center;">
+    <button id="startBtn">Start camera</button>
+    <button id="calibrateBtn" disabled>Recalibrate</button>
+    <span id="connState">Unity: not connected</span>
+  </div>
+  <div id="hud">
+    <div class="zone"><h3>Left — speed</h3><div id="zoneLeft">—</div></div>
+    <div class="zone"><h3>Center — steer</h3><div id="zoneCenter">—</div></div>
+    <div class="zone"><h3>Right — jump / grab</h3><div id="zoneRight">—</div></div>
+  </div>
+  <div id="status">starting…</div>
+</div>
+<script type="module" src="./mammoth-mapping.js"></script>
+</body>
+</html>

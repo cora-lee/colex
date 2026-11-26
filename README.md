@@ -2,19 +2,25 @@
 
 Unity receiver and test scene for the mammoth gesture mapping (settings revision `a74d9e1e785f`, exported 2026-11-26).
 
-This implements **integration option B** from `Handoff/UNITY_HANDOFF.md`: Unity polls the Python lab at `http://127.0.0.1:8765/state` and turns it into movement and one-shot jump/grab events. The pose model still runs in the Python lab; Unity does not run MediaPipe.
+The camera-driven gesture mapping (`Handoff/signals.py`, v3: left player = speed, center player = direction, right player = jump + grab) now reaches Unity one of two ways, picked by the `MammothStateReceiver.mode` field on the "Mammoth Systems" object in the scene:
+
+- **Listen (default):** a browser page (`Web/`) runs the camera and MediaPipe pose model and POSTs the same `/state` JSON straight to an embedded HTTP server inside Unity. No Python lab needed; see `Web/README.md`.
+- **Poll:** the original setup, Unity polls a Python lab (or `Tools/mock_state_server.py`) at `http://127.0.0.1:8765/state`. See `Handoff/UNITY_HANDOFF.md` for that contract.
+
+Both modes feed the exact same `MammothEventTracker`, so the gesture math, session handling, and gating are identical either way.
 
 ## Open the project
-1. Unity Hub > Add > Add project from disk > select this folder. `ProjectSettings/ProjectVersion.txt` asks for Unity 6 (6000.0.23f1); it is written for Unity 6. Unity generates the rest of the project settings on first open.
-2. Menu **Mammoth > Create Demo Scene**. This saves `Assets/Scenes/MammothDemo.unity` with a 3-lane track, a placeholder mammoth and rewards (yellow on the ground, blue in the air).
+1. Unity Hub > Add > Add project from disk > select this folder. `ProjectSettings/ProjectVersion.txt` asks for Unity 6; tested on 6000.6.10f1. Unity generates the rest of the project settings on first open.
+2. Menu **Mammoth > Create Demo Scene**. This saves `Assets/Scenes/MammothDemo.unity` with a low-poly pastel ice track, a mammoth, and rewards (gold on the ground, pink/white in the air).
 3. Press Play.
-   - With the Python lab running on the same computer in `team` mode and calibrated, the HUD shows **LAB CONTROL** and gestures drive the mammoth.
-   - Without the lab, use the keyboard: W/S speed, A/D lane, Space jump, E grab.
+   - **Browser camera (default):** follow `Web/README.md` to start the camera page. Once it shows "Unity: connected", the HUD shows **LAB CONTROL** and gestures drive the mammoth.
+   - **Python lab:** set the receiver's Mode to `Poll`, then run the lab (or `Tools/mock_state_server.py` below) in `team` mode.
+   - Without either, use the keyboard: W/S speed, A/D lane, Space jump, E grab.
 
-If Unity refuses the HTTP request, set Project Settings > Player > Other Settings > **Allow downloads over HTTP** to *Always allowed* (the lab only serves plain HTTP on loopback).
+If Unity refuses an HTTP request in Poll mode, set Project Settings > Player > Other Settings > **Allow downloads over HTTP** to *Always allowed* (the lab only serves plain HTTP on loopback). In Listen mode Unity is the server, so this setting does not apply.
 
-## Test without the camera
-`python Tools/mock_state_server.py` serves the same `/state` address from the reference mapping in `Handoff/signals.py`, driven by a 20-second script (speed ramp, left/right turns, jump, clap in the air, standing clap, tracking loss). Each loop starts a new session, so you also see the counter baseline reset. Stop it before starting the real lab, since both use port 8765.
+## Test without a real camera
+`python Tools/mock_state_server.py` serves the same `/state` address from the reference mapping in `Handoff/signals.py`, driven by a 20-second script (speed ramp, left/right turns, jump, clap in the air, standing clap, tracking loss). Each loop starts a new session, so you also see the counter baseline reset. This only works with the receiver set to `Poll` mode, and only one source (the mock server, a real lab, or the browser page) should talk to port 8765 at a time.
 
 ## How the receiver follows the handoff contract
 | Rule in UNITY_HANDOFF.md | Where |
@@ -40,11 +46,13 @@ The jump arc is animated locally from each jump event (same formula and `jump_du
 ## Layout
 ```
 Assets/Mammoth/Runtime/Core/   UnityEngine-free logic (settings, state, event tracker, motion)
-Assets/Mammoth/Runtime/        MonoBehaviours: receiver, controller, reward, HUD, follow camera
+Assets/Mammoth/Runtime/        MonoBehaviours: receiver (Poll/Listen), controller, reward, HUD, follow camera
+Assets/Mammoth/Runtime/Art/    Low-poly mesh helpers (flat shading, procedural ice chunks)
 Assets/Mammoth/Editor/         Mammoth > Create Demo Scene
 Assets/StreamingAssets/MammothMapping/   settings.json, manifest.json from the handoff
 Handoff/                       Original handoff ZIP contents (reference Python + docs)
-Tools/mock_state_server.py     Fake lab for testing without a camera
+Web/                           Browser camera page (MediaPipe pose + gesture mapping) for Listen mode
+Tools/mock_state_server.py     Fake lab for testing Poll mode without a camera
 Tools/core-tests/              Plain C# tests for Core (Mono: bash Tools/core-tests/run.sh)
 ```
 
