@@ -261,6 +261,8 @@ namespace Mammoth.EditorTools
         {
             var group = new GameObject("Terrain Zones");
             var segs = new List<MammothTerrainSegment>();
+            const float fadeLen = 3f;
+            const int fadeSteps = 4;
             float z = 50f;
             bool ice = true;
             while (z < 480f)
@@ -268,6 +270,13 @@ namespace Mammoth.EditorTools
                 const float len = 20f;
                 var type = ice ? MammothTerrainType.Ice : MammothTerrainType.Mud;
                 segs.Add(new MammothTerrainSegment { startZ = z, endZ = z + len, type = type });
+
+                Color patchColor = ice ? IceSlick : MudColor;
+
+                // Lead-in and lead-out fade strips ease the floor color into the
+                // patch color over a short run, so the patch reads as a gradual
+                // change in the ice rather than a sticker dropped with a hard edge.
+                BuildTerrainFade(group, lane, z - fadeLen, fadeLen, fadeSteps, Ice1, patchColor);
 
                 var patch = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 patch.name = ice ? "Ice Slick" : "Mud Patch";
@@ -277,10 +286,32 @@ namespace Mammoth.EditorTools
                 patch.transform.localScale = new Vector3(lane * 3f + 1.6f, 0.02f, len);
                 patch.GetComponent<Renderer>().sharedMaterial = ice ? MakeSlickMaterial(IceSlick) : MakeMaterial(MudColor);
 
+                BuildTerrainFade(group, lane, z + len, fadeLen, fadeSteps, patchColor, Ice1);
+
                 z += len + 25f;
                 ice = !ice;
             }
             return segs.ToArray();
+        }
+
+        /// <summary>A short run of narrow, stepped-color strips between fromColor and
+        /// toColor, flush with the floor. Cheap stand-in for a soft alpha gradient
+        /// using only opaque low-poly materials (matches the rest of the art style).</summary>
+        static void BuildTerrainFade(GameObject parent, float lane, float startZ, float fadeLen, int steps, Color fromColor, Color toColor)
+        {
+            float stepLen = fadeLen / steps;
+            for (int i = 0; i < steps; i++)
+            {
+                float t = (i + 0.5f) / steps;
+                var strip = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                strip.name = "Terrain Fade";
+                Object.DestroyImmediate(strip.GetComponent<Collider>());
+                strip.transform.SetParent(parent.transform);
+                strip.transform.position = new Vector3(0f, 0.015f, startZ + stepLen * (i + 0.5f));
+                // Slightly overlap neighboring strips so no sliver of bare floor shows through.
+                strip.transform.localScale = new Vector3(lane * 3f + 1.6f, 0.018f, stepLen + 0.08f);
+                strip.GetComponent<Renderer>().sharedMaterial = MakeMaterial(Color.Lerp(fromColor, toColor, t));
+            }
         }
 
         static GameObject BuildMammoth()
