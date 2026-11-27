@@ -68,6 +68,9 @@ namespace Mammoth
         readonly List<PoseDetection> detections = new List<PoseDetection>();
 
         public bool CameraReady => webCam != null && webCam.width > 16;
+        /// <summary>Live camera image for setup screens (not mirrored; draw it flipped horizontally).</summary>
+        public Texture CameraTexture => webCam;
+        public bool CameraVerticallyMirrored => webCam != null && webCam.videoVerticallyMirrored;
         public string Status { get; private set; } = "starting camera...";
 
         void OnEnable()

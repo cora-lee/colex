@@ -46,6 +46,10 @@ namespace Mammoth
                 case KeyCode.E: return kb.eKey;
                 case KeyCode.R: return kb.rKey;
                 case KeyCode.Space: return kb.spaceKey;
+                case KeyCode.Escape: return kb.escapeKey;
+                case KeyCode.Return: return kb.enterKey;
+                case KeyCode.F1: return kb.f1Key;
+                case KeyCode.P: return kb.pKey;
                 default: return null;
             }
         }

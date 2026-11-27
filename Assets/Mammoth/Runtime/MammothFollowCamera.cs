@@ -2,25 +2,74 @@ using UnityEngine;
 
 namespace Mammoth
 {
-    /// <summary>Simple chase camera: follows target forward and lateral motion, ignores jump height.</summary>
+    public enum MammothCameraMode { Follow, Showcase, Celebrate }
+
+    /// <summary>
+    /// Fixed rear elevated follow camera from the design doc. It follows the
+    /// road height (not the jump), so jumps read clearly. Showcase is the home
+    /// screen framing (mammoth and squirrel with the route climbing behind);
+    /// Celebrate slowly circles to the front for the campsite ending.
+    /// </summary>
     public class MammothFollowCamera : MonoBehaviour
     {
         public Transform target;
-        public Vector3 offset = new Vector3(0f, 4f, -8f);
-        public float lateralFollow = 0.5f;
-        public float smoothing = 8f;
+        public MammothController controller;
+        public MammothCameraMode mode = MammothCameraMode.Follow;
+        public Vector3 offset = new Vector3(0f, 4.2f, -8.5f);
+        public float lateralFollow = 0.6f;
+        public float smoothing = 6f;
 
-        float baseY;
+        float celebrateAngle;
 
-        void Start() { if (target != null) baseY = target.position.y; }
+        void Start()
+        {
+            if (controller == null && target != null) controller = target.GetComponent<MammothController>();
+            Snap();
+        }
+
+        public void Snap()
+        {
+            if (target == null) return;
+            Compute(out var pos, out var look);
+            transform.position = pos;
+            transform.LookAt(look);
+        }
+
+        void Compute(out Vector3 pos, out Vector3 look)
+        {
+            Vector3 p = target.position;
+            float ground = controller != null ? controller.GroundY : p.y;
+            switch (mode)
+            {
+                case MammothCameraMode.Showcase:
+                    pos = new Vector3(p.x - 5.2f, ground + 2.6f, p.z - 4.6f);
+                    look = new Vector3(p.x + 0.6f, ground + 2.4f, p.z + 7f);
+                    break;
+                case MammothCameraMode.Celebrate:
+                    celebrateAngle = Mathf.MoveTowards(celebrateAngle, 150f, Time.deltaTime * 35f);
+                    var dir = Quaternion.Euler(0f, celebrateAngle, 0f) * new Vector3(0f, 0f, -7f);
+                    pos = new Vector3(p.x, ground + 3f, p.z) + dir;
+                    look = new Vector3(p.x, ground + 1.6f, p.z);
+                    break;
+                default:
+                    celebrateAngle = 0f;
+                    float camZ = p.z + offset.z;
+                    float camGround = Mathf.Max(MammothRoute.Height(camZ), ground - 1.5f);
+                    pos = new Vector3(p.x * lateralFollow, camGround + offset.y, camZ);
+                    float aheadZ = p.z + 6f;
+                    look = new Vector3(p.x * lateralFollow, MammothRoute.Height(aheadZ) + 1f, aheadZ);
+                    break;
+            }
+        }
 
         void LateUpdate()
         {
             if (target == null) return;
-            Vector3 p = target.position;
-            Vector3 goal = new Vector3(p.x * lateralFollow, baseY, p.z) + offset;
-            transform.position = Vector3.Lerp(transform.position, goal, 1f - Mathf.Exp(-smoothing * Time.deltaTime));
-            transform.LookAt(new Vector3(p.x * lateralFollow, baseY + 1f, p.z + 6f));
+            Compute(out var goal, out var look);
+            float k = 1f - Mathf.Exp(-smoothing * Time.deltaTime);
+            transform.position = Vector3.Lerp(transform.position, goal, k);
+            var want = Quaternion.LookRotation(look - transform.position);
+            transform.rotation = Quaternion.Slerp(transform.rotation, want, k);
         }
     }
 }

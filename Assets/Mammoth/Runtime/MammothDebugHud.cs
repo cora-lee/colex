@@ -47,16 +47,10 @@ namespace Mammoth
             if (controller != null)
             {
                 if (receiver == null || !receiver.ControlAllowed)
-                    sb.AppendLine("keyboard: W/S speed  A/D lane  Space jump  E grab");
+                    sb.AppendLine("keyboard: W/S speed  A/D steer  Space jump  E grab");
                 bool flash = Time.time - controller.LastGrabTime < .5f;
                 string grab = flash ? (controller.LastGrabHit ? "  <color=#7CFC7C>GRAB HIT</color>" : "  <color=#FFD54A>grab missed</color>") : "";
-                string terrain = controller.CurrentTerrain switch
-                {
-                    MammothTerrainType.Ice => "  <color=#8CE9FF>ON ICE</color>",
-                    MammothTerrainType.Mud => "  <color=#C7914F>IN MUD</color>",
-                    _ => "",
-                };
-                sb.Append("score " + controller.Score + "  jumps " + controller.Jumps + "  grabs " + controller.GrabAttempts + (controller.Airborne ? "  airborne" : "") + grab + terrain);
+                sb.Append("score " + controller.Score + "  jumps " + controller.Jumps + "  grabs " + controller.GrabAttempts + (controller.Airborne ? "  airborne" : "") + grab + "  z " + controller.Distance.ToString("0") + "  x " + controller.Lateral.ToString("0.0"));
             }
 
             GUI.Box(new Rect(12, 12, 560, 150), sb.ToString(), style);
