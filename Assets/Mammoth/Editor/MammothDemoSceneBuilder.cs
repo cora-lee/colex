@@ -168,7 +168,7 @@ namespace Mammoth.EditorTools
 
                 var mf = go.AddComponent<MeshFilter>();
                 var mr = go.AddComponent<MeshRenderer>();
-                mf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 97 + 5, jitter: 0.32f, subdivisions: 1);
+                mf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 97 + 5, jitter: 0.32f, subdivisions: 2);
                 mr.sharedMaterial = MakeMaterial(Color.Lerp(Ice3, SnowWhite, (float)rng.NextDouble() * 0.6f));
             }
 
@@ -186,7 +186,7 @@ namespace Mammoth.EditorTools
                 go.transform.localScale = Vector3.one * scale;
                 var mf = go.AddComponent<MeshFilter>();
                 var mr = go.AddComponent<MeshRenderer>();
-                mf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 53 + 2, jitter: 0.22f, subdivisions: 0);
+                mf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 53 + 2, jitter: 0.22f, subdivisions: 1);
                 mr.sharedMaterial = MakeMaterial(BlushPink);
             }
         }
@@ -238,7 +238,7 @@ namespace Mammoth.EditorTools
 
                 var mf = go.AddComponent<MeshFilter>();
                 var mr = go.AddComponent<MeshRenderer>();
-                mf.sharedMesh = LowPolyMeshUtil.BuildMountainPeak(seed * 71 + 13, baseJitter: 0.3f, sides: 7);
+                mf.sharedMesh = LowPolyMeshUtil.BuildMountainPeak(seed * 71 + 13, baseJitter: 0.3f, sides: 9, tiers: 3);
                 mr.sharedMaterial = MakeMaterial(Color.Lerp(MountainRock, Ice3, MountainTints[rng.Next(MountainTints.Length)]));
 
                 var cap = new GameObject("Snow Cap");
@@ -248,7 +248,7 @@ namespace Mammoth.EditorTools
                 cap.transform.localScale = Vector3.one * (baseScale * 0.62f);
                 var cmf = cap.AddComponent<MeshFilter>();
                 var cmr = cap.AddComponent<MeshRenderer>();
-                cmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(seed * 113 + 41, jitter: 0.25f, subdivisions: 0);
+                cmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(seed * 113 + 41, jitter: 0.25f, subdivisions: 1);
                 cmr.sharedMaterial = MakeMaterial(SnowWhite);
 
                 seed++;
@@ -349,7 +349,7 @@ namespace Mammoth.EditorTools
                 r.transform.localScale = Vector3.one * .55f;
                 var mf = r.AddComponent<MeshFilter>();
                 var mr = r.AddComponent<MeshRenderer>();
-                mf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 31 + 9, jitter: 0.18f, subdivisions: 1);
+                mf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 31 + 9, jitter: 0.18f, subdivisions: 2);
                 mr.sharedMaterial = MakeMaterial(air ? Color.Lerp(BlushPink, SnowWhite, .3f) : new Color(1f, .85f, .4f));
                 r.AddComponent<MammothReward>().points = air ? 3 : 1;
             }

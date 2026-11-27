@@ -113,36 +113,69 @@ namespace Mammoth.Art
 
         /// <summary>
         /// Builds a low-poly mountain peak: a flat, jittered-radius base ring at
-        /// local y=0 (so it sits flush with the ground with no gap underneath,
-        /// unlike the octahedron ice-chunk shape which tapers to a point at both
-        /// ends) tapering up to a single jittered apex at local y=1.
+        /// local y=0 (so it sits flush with the ground with no gap underneath),
+        /// then a stack of intermediate rings (each jittered in both radius and
+        /// height) tapering up to a single jittered apex at local y=1. The extra
+        /// rings are what read as "piled snow" rather than a bare geometric cone
+        /// — a single-ring cone (the old shape) has too few facets to catch light
+        /// unevenly the way a snowdrift does.
         /// </summary>
-        public static Mesh BuildMountainPeak(int seed, float baseJitter = 0.3f, int sides = 7)
+        public static Mesh BuildMountainPeak(int seed, float baseJitter = 0.3f, int sides = 9, int tiers = 3)
         {
             var rng = new System.Random(seed);
             var verts = new System.Collections.Generic.List<Vector3> { Vector3.zero }; // [0] base center
             var tris = new System.Collections.Generic.List<int>();
 
-            int ringStart = verts.Count;
-            for (int i = 0; i < sides; i++)
+            int prevRingStart = -1;
+            for (int t = 0; t <= tiers; t++)
             {
-                float angle = (i / (float)sides) * Mathf.PI * 2f;
-                float r = 1f + ((float)rng.NextDouble() * 2f - 1f) * baseJitter;
-                verts.Add(new Vector3(Mathf.Cos(angle) * r, 0f, Mathf.Sin(angle) * r));
+                float tFrac = t / (float)(tiers + 1); // 0 at the base ring, <1 at the last ring before the apex point
+                // Eased rather than linear so the silhouette bulges through the
+                // middle tiers instead of tapering as a straight-sided pyramid.
+                float y = Mathf.Clamp01(Mathf.Pow(tFrac, 0.8f) + (t == 0 ? 0f : ((float)rng.NextDouble() * 2f - 1f) * 0.06f));
+                float radius = Mathf.Lerp(1f, 0.15f, tFrac);
+
+                int ringStart = verts.Count;
+                for (int i = 0; i < sides; i++)
+                {
+                    float angle = (i / (float)sides) * Mathf.PI * 2f;
+                    float r = radius * (1f + ((float)rng.NextDouble() * 2f - 1f) * baseJitter * (t == 0 ? 1f : 0.7f));
+                    verts.Add(new Vector3(Mathf.Cos(angle) * r, y, Mathf.Sin(angle) * r));
+                }
+
+                if (t == 0)
+                {
+                    for (int i = 0; i < sides; i++)
+                    {
+                        int a = ringStart + i;
+                        int b = ringStart + (i + 1) % sides;
+                        tris.Add(0); tris.Add(a); tris.Add(b); // base cap, downward normal
+                    }
+                }
+                else
+                {
+                    for (int i = 0; i < sides; i++)
+                    {
+                        int a0 = prevRingStart + i, b0 = prevRingStart + (i + 1) % sides;
+                        int a1 = ringStart + i, b1 = ringStart + (i + 1) % sides;
+                        tris.Add(a0); tris.Add(a1); tris.Add(b1);
+                        tris.Add(a0); tris.Add(b1); tris.Add(b0);
+                    }
+                }
+
+                prevRingStart = ringStart;
             }
 
-            float apexX = ((float)rng.NextDouble() * 2f - 1f) * 0.25f;
-            float apexZ = ((float)rng.NextDouble() * 2f - 1f) * 0.25f;
-            float apexY = 1f + ((float)rng.NextDouble() * 2f - 1f) * 0.15f;
+            float apexX = ((float)rng.NextDouble() * 2f - 1f) * 0.12f;
+            float apexZ = ((float)rng.NextDouble() * 2f - 1f) * 0.12f;
+            float apexY = 1f + ((float)rng.NextDouble() * 2f - 1f) * 0.08f;
             int apexIdx = verts.Count;
             verts.Add(new Vector3(apexX, apexY, apexZ));
-
             for (int i = 0; i < sides; i++)
             {
-                int a = ringStart + i;
-                int b = ringStart + (i + 1) % sides;
-                tris.Add(a); tris.Add(apexIdx); tris.Add(b); // side face, outward normal
-                tris.Add(0); tris.Add(a); tris.Add(b);       // base cap, downward normal
+                int a = prevRingStart + i;
+                int b = prevRingStart + (i + 1) % sides;
+                tris.Add(a); tris.Add(apexIdx); tris.Add(b);
             }
 
             var mesh = new Mesh { name = "MountainPeak" };
