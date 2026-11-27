@@ -68,6 +68,23 @@ namespace Mammoth
         readonly List<PoseDetection> detections = new List<PoseDetection>();
 
         public bool CameraReady => webCam != null && webCam.width > 16;
+
+        /// <summary>People found in the latest frame (for the skeleton overlay).</summary>
+        public int PersonCount => detections.Count;
+
+        /// <summary>Copies one person's 17 COCO keypoints, normalized and
+        /// mirrored like the preview (x 0 = left of the shown image, y 0 = top).</summary>
+        public bool GetPerson(int i, Vector2[] pts, float[] conf)
+        {
+            if (i < 0 || i >= detections.Count) return false;
+            var d = detections[i];
+            for (int k = 0; k < NumKeypoints && k < pts.Length; k++)
+            {
+                pts[k] = new Vector2(d.kpX[k], d.kpY[k]);
+                conf[k] = d.kpConf[k];
+            }
+            return true;
+        }
         /// <summary>Live camera image for setup screens (not mirrored; draw it flipped horizontally).</summary>
         public Texture CameraTexture => webCam;
         public bool CameraVerticallyMirrored => webCam != null && webCam.videoVerticallyMirrored;

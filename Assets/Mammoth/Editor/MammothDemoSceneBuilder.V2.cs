@@ -248,20 +248,28 @@ namespace Mammoth.EditorTools
             Poly(tail, "Tail Tuft Tip", new Vector3(0f, -1.12f, -0.33f), new Vector3(0.22f, 0.26f, 0.2f), LockDark, null, 0);
             rider.tail = tail.transform;
 
-            // Pillar legs with a flared foot and pale nails (FL, FR, BL, BR).
-            var legMesh = Loft("Mammoth Leg", new[]
+            // Thick column legs that swell into the haunches and sink into the
+            // body, so leg and body read as one mass (FL, FR, BL, BR).
+            Mesh LegMesh(string name, float thigh) => Loft(name, new[]
             {
-                new Ring(new Vector3(0f, -1.05f, 0.02f), Vector3.right * 0.31f, Vector3.forward * 0.33f),
-                new Ring(new Vector3(0f, -0.84f, 0.01f), Vector3.right * 0.27f, Vector3.forward * 0.28f),
-                new Ring(new Vector3(0f, -0.45f, 0f), Vector3.right * 0.25f, Vector3.forward * 0.26f),
-                new Ring(new Vector3(0f, 0.05f, 0f), Vector3.right * 0.31f, Vector3.forward * 0.34f),
-            }, 6, 2.4f);
-            var hips = new[] { new Vector3(-0.5f, 1.05f, 0.5f), new Vector3(0.5f, 1.05f, 0.5f), new Vector3(-0.48f, 1.05f, -0.76f), new Vector3(0.48f, 1.05f, -0.76f) };
+                new Ring(new Vector3(0f, -1.05f, 0.03f), Vector3.right * 0.33f, Vector3.forward * 0.35f),
+                new Ring(new Vector3(0f, -0.88f, 0.02f), Vector3.right * 0.3f, Vector3.forward * 0.31f),
+                new Ring(new Vector3(0f, -0.52f, 0f), Vector3.right * 0.31f, Vector3.forward * 0.32f),
+                new Ring(new Vector3(0f, -0.18f, 0f), Vector3.right * 0.36f, Vector3.forward * 0.38f),
+                new Ring(new Vector3(0f, 0.18f, 0f), Vector3.right * thigh, Vector3.forward * (thigh + 0.06f)),
+                new Ring(new Vector3(0.05f, 0.6f, 0f), Vector3.right * (thigh - 0.04f), Vector3.forward * thigh),
+                new Ring(new Vector3(0.05f, 0.85f, 0f), Vector3.right * 0.2f, Vector3.forward * 0.22f),
+            }, 8);
+            var frontLeg = LegMesh("Mammoth Leg Front", 0.44f);
+            var backLeg = LegMesh("Mammoth Leg Back", 0.48f);
+            var hips = new[] { new Vector3(-0.46f, 1.05f, 0.5f), new Vector3(0.46f, 1.05f, 0.5f), new Vector3(-0.44f, 1.05f, -0.74f), new Vector3(0.44f, 1.05f, -0.74f) };
             for (int i = 0; i < 4; i++)
             {
                 var hip = Pivot(rig, "Leg " + i, hips[i]);
-                MeshPart(hip, "Leg", legMesh, Vector3.zero, Vector3.one, HideDark);
-                Poly(hip, "Nails", new Vector3(0f, -1.0f, 0.27f), new Vector3(0.46f, 0.12f, 0.2f), Ivory, null, 0);
+                // mirror the right legs so the haunch bulge faces outward
+                var leg = MeshPart(hip, "Leg", i < 2 ? frontLeg : backLeg, Vector3.zero, Vector3.one, HideDark);
+                if (hips[i].x < 0f) leg.transform.localScale = new Vector3(-1f, 1f, 1f);
+                Poly(hip, "Nails", new Vector3(0f, -1.0f, 0.29f), new Vector3(0.5f, 0.12f, 0.2f), Ivory, null, 0);
                 rider.legs[i] = hip.transform;
             }
 

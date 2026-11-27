@@ -727,23 +727,120 @@ namespace Mammoth
                 return;
             }
             GUI.DrawTextureWithTexCoords(inner, camTex, camUv);
+            DrawSkeletons(inner, 2.2f);
+            DrawPlayerZones(inner, false);
+            DrawRecognitionBadges(inner, box.y - 20f, 15);
+        }
+
+        // ---------------- Body tracking overlay ----------------
+        static readonly Color TrackLime = new Color(0.72f, 0.98f, 0.42f);
+        static readonly Color PlayerBlue = new Color(0.10f, 0.36f, 0.86f);
+        static readonly int[] Bones =
+        {
+            5, 6, 5, 7, 7, 9, 6, 8, 8, 10, 5, 11, 6, 12, 11, 12, 11, 13, 13, 15, 12, 14, 14, 16,
+        };
+        readonly Vector2[] kpBuf = new Vector2[17];
+        readonly float[] kpConfBuf = new float[17];
+        Material lineMat;
+
+        /// <summary>Draws every tracked person's skeleton over the camera image,
+        /// in the same mirrored view the players see.</summary>
+        void DrawSkeletons(Rect image, float thickness)
+        {
+            if (Event.current.type != EventType.Repaint || poseEngine == null || browserMode) return;
+            if (lineMat == null)
+            {
+                lineMat = new Material(Shader.Find("Hidden/Internal-Colored")) { hideFlags = HideFlags.HideAndDontSave };
+                lineMat.SetInt("_ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);
+                lineMat.SetInt("_Cull", 0);
+            }
+            int n = poseEngine.PersonCount;
+            if (n == 0) return;
+            lineMat.SetPass(0);
+            GL.PushMatrix();
+            GL.LoadPixelMatrix();
+            GL.Begin(GL.QUADS);
+            for (int p = 0; p < n; p++)
+            {
+                if (!poseEngine.GetPerson(p, kpBuf, kpConfBuf)) continue;
+                for (int b = 0; b < Bones.Length; b += 2)
+                    if (kpConfBuf[Bones[b]] > 0.3f && kpConfBuf[Bones[b + 1]] > 0.3f)
+                        Seg(image, kpBuf[Bones[b]], kpBuf[Bones[b + 1]], thickness);
+                // neck: shoulder midpoint up to the nose
+                if (kpConfBuf[0] > 0.3f && kpConfBuf[5] > 0.3f && kpConfBuf[6] > 0.3f)
+                    Seg(image, (kpBuf[5] + kpBuf[6]) * 0.5f, kpBuf[0], thickness);
+                for (int k = 0; k < 17; k++)
+                    if (kpConfBuf[k] > 0.3f && k != 1 && k != 2 && k != 3 && k != 4)
+                        Seg(image, kpBuf[k] + new Vector2(-0.004f, 0f), kpBuf[k] + new Vector2(0.004f, 0f), thickness * 1.9f);
+            }
+            GL.End();
+            GL.PopMatrix();
+        }
+
+        void Seg(Rect image, Vector2 a, Vector2 b, float thickness)
+        {
+            if (a.x < 0f || a.x > 1f || b.x < 0f || b.x > 1f || a.y < 0f || a.y > 1f || b.y < 0f || b.y > 1f) return;
+            Vector2 pa = ToPixels(new Vector2(image.x + a.x * image.width, image.y + a.y * image.height));
+            Vector2 pb = ToPixels(new Vector2(image.x + b.x * image.width, image.y + b.y * image.height));
+            Vector2 d = pb - pa;
+            float len = d.magnitude;
+            if (len < 0.01f) d = Vector2.right; else d /= len;
+            Vector2 nrm = new Vector2(-d.y, d.x) * (thickness * uiScale * 0.5f);
+            GL.Color(TrackLime);
+            GL.Vertex3(pa.x + nrm.x, pa.y + nrm.y, 0f);
+            GL.Vertex3(pb.x + nrm.x, pb.y + nrm.y, 0f);
+            GL.Vertex3(pb.x - nrm.x, pb.y - nrm.y, 0f);
+            GL.Vertex3(pa.x - nrm.x, pa.y - nrm.y, 0f);
+        }
+
+        /// <summary>GUI point (virtual 720p space) to GL pixel space (origin bottom-left).</summary>
+        Vector2 ToPixels(Vector2 gui)
+        {
+            Vector3 sp = GUI.matrix.MultiplyPoint3x4(new Vector3(gui.x, gui.y, 0f));
+            return new Vector2(sp.x, Screen.height - sp.y);
+        }
+
+        /// <summary>Role regions in the style of the mapping page: a blue
+        /// PLAYER badge on top, a dotted divider and a Tracked chip at the bottom.</summary>
+        void DrawPlayerZones(Rect image, bool big)
+        {
             var s = receiver != null ? receiver.State : null;
-            string[] tag = { "Speed", "Direction", "Jump" };
-            float zw = inner.width / 3f;
+            string[] roles = { "SPEED", "DIRECTION", "JUMP + GRAB" };
+            float zw = image.width / 3f;
             var old = GUI.color;
             for (int i = 0; i < 3; i++)
             {
                 bool ok = s != null && s.visible != null && s.visible.Length > i && s.visible[i];
-                var zr = new Rect(inner.x + i * zw, inner.y, zw, inner.height);
-                GUI.color = new Color(1f, 1f, 1f, 0.6f);
-                if (i > 0) GUI.DrawTexture(new Rect(zr.x - 1f, zr.y, 2f, zr.height), whiteTex);
-                GUI.color = ok ? new Color(0.45f, 0.9f, 0.6f, 0.9f) : new Color(1f, 0.55f, 0.55f, 0.8f);
-                Pill(new Rect(zr.x + 2f, zr.yMax - 22f, zr.width - 4f, 20f));
+                var zr = new Rect(image.x + i * zw, image.y, zw, image.height);
+                if (i > 0)
+                {
+                    GUI.color = new Color(1f, 1f, 1f, 0.7f);
+                    for (float y = zr.y; y < zr.yMax; y += big ? 9f : 6f)
+                        GUI.DrawTexture(new Rect(zr.x - 1f, y, 2f, big ? 5f : 3f), whiteTex);
+                }
+                if (big)
+                {
+                    var badge = new Rect(zr.x + 8f, zr.y + 8f, Mathf.Min(zw - 16f, 150f), 46f);
+                    GUI.color = PlayerBlue; GUI.DrawTexture(badge, roundTex);
+                    GUI.color = old;
+                    Label(new Rect(badge.x + 10f, badge.y + 4f, badge.width - 12f, 16f), "PLAYER 0" + (i + 1), labelStyle.WithSize(11).Bold(), new Color(1f, 1f, 1f, 0.85f));
+                    Label(new Rect(badge.x + 10f, badge.y + 19f, badge.width - 12f, 24f), roles[i], labelStyle.WithSize(17).Bold(), Color.white);
+                }
+                else
+                {
+                    var tagR = new Rect(zr.x + 3f, zr.y + 3f, zw - 6f, 18f);
+                    GUI.color = PlayerBlue; Pill(tagR);
+                    GUI.color = old;
+                    Label(tagR, roles[i], centerStyle.WithSize(10).Bold(), Color.white);
+                }
+                float cw = big ? 92f : 58f, chh = big ? 26f : 17f;
+                var chip = new Rect(zr.x + (zw - cw) * 0.5f, zr.yMax - chh - (big ? 10f : 4f), cw, chh);
+                GUI.color = ok ? new Color(0.80f, 0.93f, 1f, 0.95f) : new Color(1f, 0.82f, 0.82f, 0.9f);
+                Pill(chip);
                 GUI.color = old;
-                Label(new Rect(zr.x, zr.yMax - 22f, zr.width, 20f), tag[i], centerStyle.WithSize(12).Bold(), Ink);
+                Label(chip, ok ? "Tracked" : "No one", centerStyle.WithSize(big ? 14 : 10).Bold(), ok ? PlayerBlue : new Color(0.7f, 0.25f, 0.3f));
             }
             GUI.color = old;
-            DrawRecognitionBadges(inner, box.y - 20f, 15);
         }
 
         // ---------------- Home ----------------
@@ -858,17 +955,10 @@ namespace Mammoth
 
             var s = receiver != null ? receiver.State : null;
             string[] roles = { "Speed", "Direction", "Jump + Trunk" };
-            float zw = imageRect.width / 3f;
-            for (int i = 0; i < 3; i++)
+            if (camReady)
             {
-                bool ok = s != null && s.visible != null && s.visible.Length > i && s.visible[i];
-                var zr = new Rect(imageRect.x + i * zw, imageRect.y, zw, imageRect.height);
-                var old = GUI.color;
-                GUI.color = ok ? new Color(0.45f, 0.9f, 0.6f, 0.9f) : new Color(1f, 0.55f, 0.55f, 0.75f);
-                GUI.DrawTexture(new Rect(zr.x, zr.yMax - 40f, zr.width - 4f, 40f), whiteTex);
-                if (i > 0) GUI.DrawTexture(new Rect(zr.x - 1f, zr.y, 3f, zr.height), whiteTex);
-                GUI.color = old;
-                Label(new Rect(zr.x, zr.yMax - 40f, zr.width - 4f, 40f), roles[i] + (ok ? "  OK" : ""), centerStyle.WithSize(17).Bold(), Ink);
+                DrawSkeletons(imageRect, 4f);
+                DrawPlayerZones(imageRect, true);
             }
 
             DrawRecognitionBadges(imageRect, imageRect.y + 24f, 18);
