@@ -101,10 +101,10 @@ namespace Mammoth.EditorTools
             return g;
         }
 
-        static readonly Color HideGrey = new Color(0.50f, 0.44f, 0.45f);
-        static readonly Color HideDark = new Color(0.42f, 0.36f, 0.38f);
-        static readonly Color FaceTan = new Color(0.82f, 0.66f, 0.52f);
-        static readonly Color Ivory = new Color(0.97f, 0.88f, 0.72f);
+        static readonly Color HideGrey = new Color(0.52f, 0.47f, 0.48f);
+        static readonly Color HideDark = new Color(0.46f, 0.41f, 0.42f);
+        static readonly Color FaceTan = new Color(0.84f, 0.68f, 0.54f);
+        static readonly Color Ivory = new Color(0.98f, 0.9f, 0.76f);
         static readonly Color LockDark = new Color(0.34f, 0.28f, 0.30f);
         static readonly Mesh[] polyBalls = new Mesh[3];
 
@@ -220,119 +220,110 @@ namespace Mammoth.EditorTools
             var rig = Pivot(mammoth, "Rig", Vector3.zero);
             rider.rig = rig.transform;
 
-            // Body: one skin from rump to chest.
+            // Body: tall at the shoulders, back sloping down to a lower rump.
             var body = Pivot(rig, "Body", Vector3.zero);
             MeshPart(body, "Torso", Loft("Mammoth Torso", new[]
             {
-                // rounded rump: several shrinking sections instead of a flat cap
-                Slice(-1.44f, 1.42f, 0.08f, 0.10f),
-                Slice(-1.38f, 1.38f, 0.36f, 0.44f),
-                Slice(-1.24f, 1.34f, 0.60f, 0.72f),
-                Slice(-1.0f, 1.34f, 0.76f, 0.88f),
-                Slice(-0.62f, 1.40f, 0.84f, 0.96f),
-                Slice(-0.05f, 1.54f, 0.86f, 1.04f),
-                Slice(0.42f, 1.70f, 0.84f, 1.14f),
-                // chest stays full and runs on into the head (no pinched neck)
-                Slice(0.84f, 1.76f, 0.80f, 1.08f),
-                Slice(1.16f, 1.86f, 0.66f, 0.9f),
-                Slice(1.4f, 1.96f, 0.4f, 0.56f),
-            }, 8, 2.7f), Vector3.zero, Vector3.one, HideGrey);
+                Slice(-1.42f, 1.52f, 0.10f, 0.14f),
+                Slice(-1.34f, 1.50f, 0.42f, 0.52f),
+                Slice(-1.16f, 1.50f, 0.68f, 0.74f),
+                Slice(-0.82f, 1.56f, 0.80f, 0.86f),
+                Slice(-0.32f, 1.70f, 0.86f, 0.98f),
+                Slice(0.16f, 1.86f, 0.88f, 1.12f),
+                Slice(0.56f, 1.96f, 0.86f, 1.2f),
+                Slice(0.92f, 1.98f, 0.76f, 1.08f),
+                Slice(1.16f, 2.0f, 0.56f, 0.82f),
+                Slice(1.3f, 2.02f, 0.26f, 0.4f),
+            }, 8, 2.5f), Vector3.zero, Vector3.one, HideGrey);
             rider.body = body.transform;
 
-            // Tail: sticks out from the top of the rump, curves down, ends in a tuft.
-            var tail = Pivot(body, "Tail", new Vector3(0f, 1.86f, -1.3f));
+            // Short thin tail with a small tuft.
+            var tail = Pivot(body, "Tail", new Vector3(0f, 1.9f, -1.32f));
             MeshPart(tail, "Tail", Tube("Mammoth Tail", new[]
             {
-                new Vector3(0f, 0.05f, 0.12f), new Vector3(0f, 0.02f, -0.12f), new Vector3(0f, -0.18f, -0.28f),
-                new Vector3(0f, -0.48f, -0.34f), new Vector3(0f, -0.74f, -0.32f),
-            }, new[] { 0.12f, 0.1f, 0.085f, 0.075f, 0.07f }, 6), Vector3.zero, Vector3.one, LockDark);
-            Poly(tail, "Tail Tuft", new Vector3(0f, -0.9f, -0.33f), new Vector3(0.36f, 0.5f, 0.32f), LockDark, new Vector3(0f, 45f, 0f), 1);
-            Poly(tail, "Tail Tuft Tip", new Vector3(0f, -1.12f, -0.33f), new Vector3(0.22f, 0.26f, 0.2f), LockDark, null, 0);
+                new Vector3(0f, 0.04f, 0.1f), new Vector3(0f, -0.04f, -0.1f), new Vector3(0f, -0.3f, -0.18f), new Vector3(0f, -0.58f, -0.18f),
+            }, new[] { 0.08f, 0.065f, 0.05f, 0.045f }, 5), Vector3.zero, Vector3.one, HideDark);
+            Poly(tail, "Tail Tuft", new Vector3(0f, -0.68f, -0.18f), new Vector3(0.16f, 0.26f, 0.14f), HideDark, null, 0);
             rider.tail = tail.transform;
 
-            // Thick column legs that swell into the haunches and sink into the
-            // body, so leg and body read as one mass (FL, FR, BL, BR).
-            Mesh LegMesh(string name, float thigh) => Loft(name, new[]
+            // Straight, thick column legs with a slightly flared foot and a pale
+            // toenail band at the bottom (FL, FR, BL, BR).
+            var legMesh = Loft("Mammoth Leg", new[]
             {
-                new Ring(new Vector3(0f, -1.05f, 0.03f), Vector3.right * 0.33f, Vector3.forward * 0.35f),
-                new Ring(new Vector3(0f, -0.88f, 0.02f), Vector3.right * 0.3f, Vector3.forward * 0.31f),
-                new Ring(new Vector3(0f, -0.52f, 0f), Vector3.right * 0.31f, Vector3.forward * 0.32f),
-                new Ring(new Vector3(0f, -0.18f, 0f), Vector3.right * 0.36f, Vector3.forward * 0.38f),
-                new Ring(new Vector3(0f, 0.18f, 0f), Vector3.right * thigh, Vector3.forward * (thigh + 0.06f)),
-                new Ring(new Vector3(0.05f, 0.6f, 0f), Vector3.right * (thigh - 0.04f), Vector3.forward * thigh),
-                new Ring(new Vector3(0.05f, 0.85f, 0f), Vector3.right * 0.2f, Vector3.forward * 0.22f),
+                new Ring(new Vector3(0f, -1.05f, 0.02f), Vector3.right * 0.37f, Vector3.forward * 0.38f),
+                new Ring(new Vector3(0f, -0.9f, 0.01f), Vector3.right * 0.33f, Vector3.forward * 0.34f),
+                new Ring(new Vector3(0f, -0.5f, 0f), Vector3.right * 0.33f, Vector3.forward * 0.34f),
+                new Ring(new Vector3(0f, 0.0f, 0f), Vector3.right * 0.4f, Vector3.forward * 0.42f),
+                new Ring(new Vector3(0f, 0.7f, 0f), Vector3.right * 0.36f, Vector3.forward * 0.38f),
             }, 8);
-            var frontLeg = LegMesh("Mammoth Leg Front", 0.44f);
-            var backLeg = LegMesh("Mammoth Leg Back", 0.48f);
-            var hips = new[] { new Vector3(-0.46f, 1.05f, 0.5f), new Vector3(0.46f, 1.05f, 0.5f), new Vector3(-0.44f, 1.05f, -0.74f), new Vector3(0.44f, 1.05f, -0.74f) };
+            var nailMesh = Loft("Mammoth Toenails", new[]
+            {
+                new Ring(new Vector3(0f, -1.06f, 0.03f), Vector3.right * 0.395f, Vector3.forward * 0.405f),
+                new Ring(new Vector3(0f, -0.96f, 0.025f), Vector3.right * 0.375f, Vector3.forward * 0.385f),
+            }, 8);
+            var hips = new[] { new Vector3(-0.48f, 1.05f, 0.56f), new Vector3(0.48f, 1.05f, 0.56f), new Vector3(-0.46f, 1.05f, -0.86f), new Vector3(0.46f, 1.05f, -0.86f) };
             for (int i = 0; i < 4; i++)
             {
                 var hip = Pivot(rig, "Leg " + i, hips[i]);
-                // mirror the right legs so the haunch bulge faces outward
-                var leg = MeshPart(hip, "Leg", i < 2 ? frontLeg : backLeg, Vector3.zero, Vector3.one, HideDark);
-                if (hips[i].x < 0f) leg.transform.localScale = new Vector3(-1f, 1f, 1f);
-                Poly(hip, "Nails", new Vector3(0f, -1.0f, 0.29f), new Vector3(0.5f, 0.12f, 0.2f), Ivory, null, 0);
+                MeshPart(hip, "Leg", legMesh, Vector3.zero, Vector3.one, HideDark);
+                MeshPart(hip, "Toenails", nailMesh, Vector3.zero, Vector3.one, FaceTan);
                 rider.legs[i] = hip.transform;
             }
 
-            // Head turns with the squirrel's pull.
-            var head = Pivot(rig, "Head Pivot", new Vector3(0f, 2.0f, 1.0f));
+            // Head: a big grey wool crest that rises above the shoulders, with a
+            // long tan face that narrows straight into the trunk.
+            var head = Pivot(rig, "Head Pivot", new Vector3(0f, 2.3f, 1.08f));
             rider.head = head.transform;
-            // Woolly collar behind the face: covers the joint so the head grows
-            // out of the shoulders, and turns with the head.
-            MeshPart(head, "Collar", Loft("Mammoth Collar", new[]
+            MeshPart(head, "Crest", Loft("Mammoth Crest", new[]
             {
-                new Ring(new Vector3(0f, 0.05f, -0.34f), Vector3.right * 0.66f, Vector3.up * 0.78f),
-                new Ring(new Vector3(0f, 0.08f, -0.02f), Vector3.right * 0.66f, Vector3.up * 0.8f),
-                new Ring(new Vector3(0f, 0.1f, 0.26f), Vector3.right * 0.56f, Vector3.up * 0.66f),
-                new Ring(new Vector3(0f, 0.1f, 0.4f), Vector3.right * 0.34f, Vector3.up * 0.4f),
-            }, 8), Vector3.zero, Vector3.one, HideGrey);
-            MeshPart(head, "Dome", Loft("Mammoth Dome", new[]
-            {
-                Layer(0.80f, 0.12f, 0.20f, 0.20f),
-                Layer(0.66f, 0.14f, 0.40f, 0.38f),
-                Layer(0.42f, 0.16f, 0.48f, 0.46f),
-                Layer(0.22f, 0.14f, 0.44f, 0.40f),
-            }, 8, 2.6f), Vector3.zero, Vector3.one, HideGrey);
+                Layer(-0.3f, -0.12f, 0.5f, 0.56f),
+                Layer(0.3f, -0.08f, 0.56f, 0.6f),
+                Layer(0.78f, 0.0f, 0.46f, 0.5f),
+                Layer(1.02f, 0.04f, 0.3f, 0.32f),
+                Layer(1.1f, 0.06f, 0.12f, 0.12f),
+            }, 8, 2.4f), Vector3.zero, Vector3.one, HideGrey);
             MeshPart(head, "Face", Loft("Mammoth Face", new[]
             {
-                Layer(0.50f, 0.34f, 0.34f, 0.30f),
-                Layer(0.34f, 0.40f, 0.50f, 0.42f),
-                Layer(0.06f, 0.46f, 0.54f, 0.44f),
-                Layer(-0.22f, 0.50f, 0.46f, 0.38f),
-                Layer(-0.46f, 0.54f, 0.30f, 0.28f),
-            }, 8, 2.6f), Vector3.zero, Vector3.one, FaceTan);
+                Layer(0.82f, 0.24f, 0.3f, 0.24f),
+                Layer(0.6f, 0.34f, 0.5f, 0.36f),
+                Layer(0.24f, 0.44f, 0.54f, 0.4f),
+                Layer(-0.12f, 0.5f, 0.44f, 0.34f),
+                Layer(-0.44f, 0.56f, 0.3f, 0.26f),
+                Layer(-0.62f, 0.58f, 0.25f, 0.22f),
+            }, 8, 2.4f), Vector3.zero, Vector3.one, FaceTan);
             for (int s = -1; s <= 1; s += 2)
             {
                 string sn = s < 0 ? " L" : " R";
-                var ear = Pivot(head, "Ear" + sn, new Vector3(s * 0.5f, 0.3f, 0.26f));
-                ear.transform.localRotation = Quaternion.Euler(0f, s * 30f, 0f);
-                Poly(ear, "Ear Flap", new Vector3(s * 0.14f, -0.06f, 0f), new Vector3(0.36f, 0.56f, 0.14f), FaceTan, new Vector3(0f, 0f, s * 8f), 0);
+                // small tan ear just behind the eye
+                var ear = Pivot(head, "Ear" + sn, new Vector3(s * 0.52f, 0.46f, 0.12f));
+                Poly(ear, "Ear Flap", new Vector3(s * 0.06f, -0.04f, -0.02f), new Vector3(0.14f, 0.42f, 0.34f), FaceTan, new Vector3(0f, s * -18f, 0f), 1);
                 rider.ears[s < 0 ? 0 : 1] = ear.transform;
+                // calm closed eye: a short dark slit
+                Poly(head, "Eye" + sn, new Vector3(s * 0.43f, 0.5f, 0.6f), new Vector3(0.2f, 0.03f, 0.05f), Dark, new Vector3(0f, s * 38f, s * -8f), 0);
 
-                Poly(head, "Eye" + sn, new Vector3(s * 0.47f, 0.2f, 0.66f), new Vector3(0.05f, 0.06f, 0.16f), Dark, new Vector3(-14f, s * 28f, 0f), 0);
-
+                // Big tusks: from under the face, down and out, then sweeping
+                // forward and curling up and inward.
                 var tusk = Tube("Mammoth Tusk" + sn, new[]
                 {
-                    new Vector3(s * 0.24f, -0.28f, 0.56f), new Vector3(s * 0.36f, -0.76f, 0.76f), new Vector3(s * 0.54f, -1.02f, 1.14f),
-                    new Vector3(s * 0.64f, -0.98f, 1.6f), new Vector3(s * 0.56f, -0.72f, 1.96f), new Vector3(s * 0.38f, -0.42f, 2.08f),
-                    new Vector3(s * 0.24f, -0.24f, 1.98f),
-                }, new[] { 0.115f, 0.11f, 0.1f, 0.085f, 0.065f, 0.042f, 0.014f }, 5);
+                    new Vector3(s * 0.26f, -0.4f, 0.66f), new Vector3(s * 0.36f, -0.78f, 0.86f), new Vector3(s * 0.52f, -1.08f, 1.24f),
+                    new Vector3(s * 0.7f, -1.06f, 1.72f), new Vector3(s * 0.74f, -0.74f, 2.08f), new Vector3(s * 0.6f, -0.36f, 2.2f),
+                    new Vector3(s * 0.42f, -0.16f, 2.08f),
+                }, new[] { 0.2f, 0.19f, 0.17f, 0.14f, 0.105f, 0.068f, 0.022f }, 6);
                 MeshPart(head, "Tusk" + sn, tusk, Vector3.zero, Vector3.one, Ivory);
             }
 
-            // Long trunk, one piece so the controller can swing it up for a grab.
-            var pivot = Pivot(head, "Trunk Pivot", new Vector3(0f, -0.4f, 0.54f));
+            // Trunk carries on from the bottom of the face, same width, same tan.
+            var pivot = Pivot(head, "Trunk Pivot", new Vector3(0f, -0.6f, 0.58f));
             var trunkMesh = Tube("Mammoth Trunk", new[]
             {
-                new Vector3(0f, 0.1f, 0f), new Vector3(0f, -0.3f, 0.08f), new Vector3(0f, -0.68f, 0.1f),
-                new Vector3(0f, -1.02f, 0.07f), new Vector3(0f, -1.26f, 0.14f), new Vector3(0f, -1.36f, 0.32f),
-            }, new[] { 0.29f, 0.24f, 0.2f, 0.16f, 0.13f, 0.1f }, 6);
+                new Vector3(0f, 0.04f, 0f), new Vector3(0f, -0.36f, 0.04f), new Vector3(0f, -0.76f, 0.04f),
+                new Vector3(0f, -1.12f, 0.02f), new Vector3(0f, -1.36f, 0.1f), new Vector3(0f, -1.46f, 0.28f),
+            }, new[] { 0.25f, 0.21f, 0.18f, 0.15f, 0.13f, 0.11f }, 8);
             MeshPart(pivot, "Trunk", trunkMesh, Vector3.zero, Vector3.one, FaceTan);
             trunkPivot = pivot.transform;
 
             // Squirrel rider: a few clean shapes, big enough to read from behind.
-            var sq = Pivot(head, "Squirrel", new Vector3(0f, 0.78f, 0.12f));
+            var sq = Pivot(head, "Squirrel", new Vector3(0f, 1.06f, 0.04f));
             sq.transform.localScale = Vector3.one * 1.5f;
             MeshPart(sq, "Body", Loft("Squirrel Body", new[]
             {
@@ -360,7 +351,7 @@ namespace Mammoth.EditorTools
             rider.squirrel = squirrel;
             rider.restHand = new Vector3(0.133f, 0.1f, 0.2f);
             rider.pullHand = new Vector3(0.27f, 0.4f, -0.02f);
-            rider.trophyPoint = new Vector3(0f, 5.0f, 1.0f);
+            rider.trophyPoint = new Vector3(0f, 5.6f, 1.0f);
 
             // Hair reins: a lock on each side of the dome, held in each paw.
             for (int i = 0; i < 2; i++)
@@ -368,8 +359,8 @@ namespace Mammoth.EditorTools
                 int s = i == 0 ? -1 : 1;
                 string sn = s < 0 ? " L" : " R";
                 rider.shoulders[i] = Pivot(sq, "Shoulder" + sn, new Vector3(s * 0.12f, 0.28f, 0.05f)).transform;
-                rider.hairRoots[i] = Pivot(head, "Hair Root" + sn, new Vector3(s * 0.2f, 0.62f, 0.42f)).transform;
-                Poly(head, "Hair Root Tuft" + sn, new Vector3(s * 0.2f, 0.66f, 0.42f), new Vector3(0.16f, 0.2f, 0.16f), LockDark, null, 0);
+                rider.hairRoots[i] = Pivot(head, "Hair Root" + sn, new Vector3(s * 0.22f, 0.88f, 0.34f)).transform;
+                Poly(head, "Hair Root Tuft" + sn, new Vector3(s * 0.22f, 0.9f, 0.34f), new Vector3(0.16f, 0.2f, 0.16f), LockDark, null, 0);
                 rider.locks[i] = Poly(head, "Hair Lock" + sn, Vector3.zero, Vector3.one * 0.08f, LockDark, null, 0).transform;
                 rider.arms[i] = Poly(head, "Squirrel Arm" + sn, Vector3.zero, Vector3.one * 0.07f, SquirrelFur, null, 0).transform;
                 var hand = Poly(head, "Squirrel Paw" + sn, Vector3.zero, Vector3.one * 0.14f, SquirrelFur, null, 1);
