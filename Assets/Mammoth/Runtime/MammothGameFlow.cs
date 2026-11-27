@@ -1077,8 +1077,12 @@ namespace Mammoth
         }
 
         /// <summary>Big round badge: soft shadow, white ring, colored disc, label.</summary>
-        void BigBadge(Vector2 center, float size, Color fill, string text, int fontSize, float alpha)
+        /// <summary>Circle badge whose text scales with the circle (fontRatio =
+        /// font size / circle size), so the pop-in animation never leaves the
+        /// text bigger than, or off-center from, the circle.</summary>
+        void BigBadge(Vector2 center, float size, Color fill, string text, float fontRatio, float alpha)
         {
+            int fontSize = Mathf.Max(8, Mathf.RoundToInt(size * fontRatio));
             var old = GUI.color;
             var r = new Rect(center.x - size * 0.5f, center.y - size * 0.5f, size, size);
             GUI.color = new Color(0.25f, 0.18f, 0.32f, 0.22f * alpha);
@@ -1088,17 +1092,47 @@ namespace Mammoth
             float ring = size * 0.07f;
             GUI.color = new Color(fill.r, fill.g, fill.b, alpha);
             GUI.DrawTexture(new Rect(r.x + ring, r.y + ring, r.width - ring * 2f, r.height - ring * 2f), bigCircleTex);
-            // soft top highlight
-            GUI.color = new Color(1f, 1f, 1f, 0.18f * alpha);
-            GUI.DrawTexture(new Rect(r.x + size * 0.22f, r.y + size * 0.14f, size * 0.56f, size * 0.3f), bigCircleTex);
             GUI.color = old;
             var shadowStyle = bigStyle.WithSize(fontSize);
-            // Optical centering: the font sits low in its line box, and a "1"
-            // carries its weight on the left, so nudge the text to look centered.
-            var tr = new Rect(r.x + (text == "1" ? fontSize * 0.05f : 0f), r.y - fontSize * 0.09f, r.width, r.height);
+            float th = Mathf.Max(size, fontSize * 1.6f);
+            Vector2 ink = InkCenterOffset(text, shadowStyle);
+            var tr = new Rect(center.x - th * 0.5f - ink.x, center.y - th * 0.5f - ink.y, th, th);
             Label(new Rect(tr.x, tr.y + 4f, tr.width, tr.height), text, shadowStyle, new Color(0.3f, 0.2f, 0.3f, 0.25f * alpha));
             Label(tr, text, shadowStyle, new Color(1f, 1f, 1f, alpha));
         }
+
+        /// <summary>How far the drawn glyph ink sits from the rect center when a
+        /// MiddleCenter label is laid out, measured from the real glyph
+        /// bounds (side bearings, ascent), so the caller can cancel it and put
+        /// the ink exactly on the badge center.</summary>
+        Vector2 InkCenterOffset(string text, GUIStyle style)
+        {
+            var f = style.font != null ? style.font : font;
+            if (f == null || string.IsNullOrEmpty(text)) return Vector2.zero;
+            int fs = style.fontSize;
+            var fst = style.fontStyle;
+            f.RequestCharactersInTexture(text, fs, fst);
+            float pen = 0f, minX = float.MaxValue, maxX = float.MinValue, minY = float.MaxValue, maxY = float.MinValue;
+            foreach (char ch in text)
+            {
+                if (!f.GetCharacterInfo(ch, out var ci, fs, fst)) continue;
+                minX = Mathf.Min(minX, pen + ci.minX); maxX = Mathf.Max(maxX, pen + ci.maxX);
+                minY = Mathf.Min(minY, ci.minY); maxY = Mathf.Max(maxY, ci.maxY);
+                pen += ci.advance;
+            }
+            if (minX > maxX) return Vector2.zero;
+            float ox = (minX + maxX) * 0.5f - pen * 0.5f;
+            float lineH = style.CalcSize(new GUIContent(text)).y;
+            float asc = f.fontSize > 0 && f.ascent > 0 ? f.ascent * fs / f.fontSize : fs * 0.8f;
+            // line box is centered in the rect; baseline sits asc below its top
+            float oy = -lineH * 0.5f + asc - (minY + maxY) * 0.5f;
+            // IMGUI's text backend lays glyphs out slightly up and left of what
+            // the Font metrics predict; constant measured on screen.
+            ox -= fs * inkBiasX;
+            oy -= fs * inkBiasY;
+            return new Vector2(ox, oy);
+        }
+        const float inkBiasX = 0.07f, inkBiasY = 0f;
 
         void DrawCountdown()
         {
@@ -1108,7 +1142,7 @@ namespace Mammoth
             Color[] fills = { Mint, Butter, Rose }; // 1, 2, 3
             float size = 210f * Mathf.LerpUnclamped(0.55f, 1f, EaseOutBack(local / 0.35f));
             float alpha = 1f - Mathf.Clamp01((local - 0.82f) / 0.18f);
-            var c = new Vector2(view.x * 0.5f, view.y * 0.44f);
+            var c = new Vector2(view.x * 0.5f, view.y * 0.30f);
 
             // gentle dim so the badge reads over the bright snow
             var old = GUI.color;
@@ -1116,15 +1150,15 @@ namespace Mammoth
             GUI.DrawTexture(new Rect(0f, 0f, view.x, view.y), whiteTex);
             GUI.color = old;
 
-            BigBadge(c, size, fills[n - 1], n.ToString(), 104, alpha);
+            BigBadge(c, size * 0.82f, fills[n - 1], n.ToString(), 0.476f, alpha);
 
             // progress dots under the badge
             for (int i = 0; i < 3; i++)
             {
                 bool lit = i < 4 - n;
-                Circle(new Rect(c.x - 34f + i * 26f, c.y + 140f, 16f, 16f), lit ? Color.white : new Color(1f, 1f, 1f, 0.4f));
+                Circle(new Rect(c.x - 34f + i * 26f, c.y + 112f, 16f, 16f), lit ? Color.white : new Color(1f, 1f, 1f, 0.4f));
             }
-            var cap = new Rect(c.x - 110f, c.y + 168f, 220f, 40f);
+            var cap = new Rect(c.x - 100f, c.y + 140f, 200f, 38f);
             Panel(cap, new Color(1f, 1f, 1f, 0.92f));
             Label(cap, countdownIsResume ? "Resuming" : "Get ready", centerStyle.WithSize(19).Bold(), Acorn);
         }
@@ -1135,7 +1169,7 @@ namespace Mammoth
             if (t > 0.9f) return;
             float size = 230f * Mathf.LerpUnclamped(0.6f, 1f, EaseOutBack(t / 0.3f));
             float alpha = 1f - Mathf.Clamp01((t - 0.6f) / 0.3f);
-            BigBadge(new Vector2(view.x * 0.5f, view.y * 0.44f), size, Acorn, "Go!", 88, alpha);
+            BigBadge(new Vector2(view.x * 0.5f, view.y * 0.30f), size * 0.82f, Acorn, "Go!", 0.31f, alpha);
         }
 
         // ---------------- In-game HUD ----------------
@@ -1220,22 +1254,38 @@ namespace Mammoth
         {
             var cam = Camera.main;
             if (cam == null || controller == null) return;
+            if (State == MammothFlowState.Countdown || Time.unscaledTime - goStart < 0.9f) return;
+            // Only the next high acorn ahead, so tags never pile up on each other.
+            MammothReward next = null;
+            float best = float.MaxValue;
             foreach (var r in MammothReward.Active)
             {
                 if (!r.high || r.practice) continue;
-                float dz = r.transform.position.z - controller.Distance;
-                if (dz < -1f || dz > 45f) continue;
-                Vector3 sp = cam.WorldToScreenPoint(r.transform.position + Vector3.up * 0.75f);
-                if (sp.z <= 0f) continue;
-                float gx = sp.x / uiScale, gy = (Screen.height - sp.y) / uiScale;
-                float near = Mathf.InverseLerp(45f, 8f, dz);
-                float sc = Mathf.Lerp(0.6f, 1f, near);
-                float a = Mathf.Clamp01(Mathf.InverseLerp(45f, 35f, dz)) * (dz < 1f ? Mathf.Clamp01(dz + 1f) : 1f);
-                var rect = new Rect(gx - 38f * sc, gy - 30f * sc, 76f * sc, 26f * sc);
-                var c = Sky; c.a = 0.95f * a;
-                Panel(rect, c, false);
-                Label(rect, "JUMP", centerStyle.WithSize(Mathf.RoundToInt(15 * sc)).Bold(), new Color(1f, 1f, 1f, a));
+                float d = r.transform.position.z - controller.Distance;
+                if (d > -0.5f && d < 34f && d < best) { best = d; next = r; }
             }
+            if (next == null) return;
+            Vector3 sp = cam.WorldToScreenPoint(next.transform.position + Vector3.up * 0.7f);
+            if (sp.z <= 0f) return;
+            float gx = sp.x / uiScale, gy = (Screen.height - sp.y) / uiScale;
+            float sc = Mathf.Lerp(0.75f, 1.05f, Mathf.InverseLerp(34f, 6f, best));
+            float a = Mathf.Clamp01(Mathf.InverseLerp(34f, 28f, best));
+            float bob = Mathf.Sin(Time.unscaledTime * 4f) * 3f;
+            float w = 70f * sc, h = 26f * sc;
+            var rect = new Rect(gx - w * 0.5f, gy - h - 12f * sc + bob, w, h);
+            var old = GUI.color;
+            // pointer: a short stem and a dot down to the acorn
+            float stemW = 3f * sc;
+            GUI.color = new Color(Sky.r, Sky.g, Sky.b, a);
+            GUI.DrawTexture(new Rect(gx - stemW * 0.5f, rect.yMax - 2f, stemW, 9f * sc), whiteTex);
+            float dot = 8f * sc;
+            GUI.DrawTexture(new Rect(gx - dot * 0.5f, rect.yMax + 7f * sc - dot * 0.5f, dot, dot), circleTex);
+            GUI.color = new Color(1f, 1f, 1f, a);
+            Pill(new Rect(rect.x - 2f, rect.y - 2f, rect.width + 4f, rect.height + 4f));
+            GUI.color = new Color(Sky.r, Sky.g, Sky.b, a);
+            Pill(rect);
+            GUI.color = old;
+            Label(rect, "JUMP", centerStyle.WithSize(Mathf.RoundToInt(14 * sc)).Bold(), new Color(1f, 1f, 1f, a));
         }
 
         string HighAcornPrompt(float z)

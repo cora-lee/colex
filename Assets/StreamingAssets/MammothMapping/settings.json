@@ -16,6 +16,6 @@
   "clap_close": 0.35,
   "clap_open": 0.9,
   "clap_cooldown": 0.35,
-  "jump_duration": 0.9,
+  "jump_duration": 0.55,
   "jump_height": 1.5
 }

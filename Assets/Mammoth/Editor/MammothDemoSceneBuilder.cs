@@ -302,8 +302,8 @@ namespace Mammoth.EditorTools
         {
             var group = new GameObject("Terrain Zones");
             var segs = new List<MammothTerrainSegment>();
-            const float len = 20f, fadeLen = 3f;
-            const int fadeSteps = 4;
+            const float len = 20f;
+            int seed = 0;
             foreach (var t in TerrainPatches)
             {
                 bool ice = t.type == MammothTerrainType.Ice;
@@ -311,17 +311,75 @@ namespace Mammoth.EditorTools
                 Color road = t.z < SnowEndZ ? RoadSnow : RoadEarth;
                 Color patchColor = ice ? IceSlick : MudColor;
                 var patchMat = ice ? MakeSlickMaterial(IceSlick) : MakeMaterial(MudColor);
-                RoadPatch(group, ice ? "Ice Slick" : "Mud Patch", t.z, t.z + len, 0.07f, patchMat);
-                // Short stepped fades so the patch eases into the road color.
-                float step = fadeLen / fadeSteps;
-                for (int i = 0; i < fadeSteps; i++)
+                float cz = t.z + len * 0.5f;
+                // Soft rim first (slightly bigger, blended), then the patch on top.
+                BlobPatch(group, "Terrain Rim", cz, len * 0.5f + 1.2f, 4.6f, 0.065f, seed, MakeMaterial(Color.Lerp(road, patchColor, 0.45f)));
+                BlobPatch(group, ice ? "Ice Slick" : "Mud Patch", cz, len * 0.5f, 4.3f, 0.07f, seed, patchMat);
+                // A few small splats spilling out past the front and back edges.
+                var rng = new System.Random(900 + seed);
+                for (int i = 0; i < 4; i++)
                 {
-                    float f = (i + 0.5f) / fadeSteps;
-                    RoadPatch(group, "Terrain Fade", t.z - fadeLen + i * step, t.z - fadeLen + (i + 1) * step + 0.05f, 0.065f, MakeMaterial(Color.Lerp(road, patchColor, f)));
-                    RoadPatch(group, "Terrain Fade", t.z + len + i * step - 0.05f, t.z + len + (i + 1) * step, 0.065f, MakeMaterial(Color.Lerp(patchColor, road, f)));
+                    float sz = (i % 2 == 0 ? t.z - 1.5f : t.z + len + 1.5f) + (float)(rng.NextDouble() - 0.5) * 3f;
+                    float sx = (float)(rng.NextDouble() * 2 - 1) * 2.8f;
+                    float r = 0.6f + (float)rng.NextDouble() * 0.9f;
+                    BlobPatch(group, "Terrain Splat", sz, r, r * 1.3f, 0.068f, seed * 7 + i + 1, patchMat, sx);
                 }
+                seed++;
             }
             return segs.ToArray();
+        }
+
+        /// <summary>An organic puddle shape on the road: wavy outline from a few
+        /// sine harmonics, built as rings so it follows the slope. Clipped to
+        /// the road width.</summary>
+        static void BlobPatch(GameObject parent, string name, float cz, float rz, float rx, float lift, int seed, Material mat, float cx = 0f)
+        {
+            const int segs = 72, rings = 6;
+            var rng = new System.Random(seed * 31 + 5);
+            var ph = new float[4];
+            for (int i = 0; i < ph.Length; i++) ph[i] = (float)rng.NextDouble() * Mathf.PI * 2f;
+            float half = MammothRoute.RoadHalfWidth - 0.05f;
+            var verts = new List<Vector3> { new Vector3(cx, MammothRoute.Height(cz) + lift, cz) };
+            for (int r = 1; r <= rings; r++)
+            {
+                float f = r / (float)rings;
+                for (int k = 0; k < segs; k++)
+                {
+                    float a = k / (float)segs * Mathf.PI * 2f;
+                    float wob = 1f + 0.10f * Mathf.Sin(2f * a + ph[0]) + 0.07f * Mathf.Sin(3f * a + ph[1])
+                                   + 0.05f * Mathf.Sin(5f * a + ph[2]) + 0.03f * Mathf.Sin(8f * a + ph[3]);
+                    float x = Mathf.Clamp(cx + Mathf.Cos(a) * rx * wob * f, -half, half);
+                    float z = cz + Mathf.Sin(a) * rz * wob * f;
+                    verts.Add(new Vector3(x, MammothRoute.Height(z) + lift, z));
+                }
+            }
+            var tris = new List<int>();
+            for (int k = 0; k < segs; k++)
+                tris.AddRange(new[] { 0, 1 + (k + 1) % segs, 1 + k });
+            for (int r = 1; r < rings; r++)
+            {
+                int i0 = 1 + (r - 1) * segs, i1 = 1 + r * segs;
+                for (int k = 0; k < segs; k++)
+                {
+                    int k1 = (k + 1) % segs;
+                    tris.AddRange(new[] { i0 + k, i0 + k1, i1 + k, i0 + k1, i1 + k1, i1 + k });
+                }
+            }
+            var mesh = new Mesh { name = name };
+            mesh.SetVertices(verts);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateNormals();
+            if (mesh.normals.Length > 0 && mesh.normals[0].y < 0f)
+            {
+                for (int i = 0; i < tris.Count; i += 3) { int tmp = tris[i + 1]; tris[i + 1] = tris[i + 2]; tris[i + 2] = tmp; }
+                mesh.SetTriangles(tris, 0);
+                mesh.RecalculateNormals();
+            }
+            mesh.RecalculateBounds();
+            var go = new GameObject(name);
+            go.transform.SetParent(parent.transform);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            go.AddComponent<MeshRenderer>().sharedMaterial = mat;
         }
 
         /// <summary>A flat strip across the road width that follows the slope.</summary>
