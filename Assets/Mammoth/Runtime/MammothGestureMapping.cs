@@ -57,6 +57,10 @@ namespace Mammoth
 
         /// <summary>obs[0]=left(speed), obs[1]=center(steer), obs[2]=right(jump/grab),
         /// matching Web/mammoth-mapping.js's [a, b, c] destructuring.</summary>
+        /// <summary>Test shortcut: treat the session as calibrated now, so a single
+        /// tester can play with whichever roles the camera sees.</summary>
+        public void ForceCalibrate() { neutralSet = true; calibrating = false; }
+
         public MammothState Update(ZoneObservation?[] obs, double now)
         {
             var a = obs[0]; var b = obs[1]; var c = obs[2];
@@ -144,6 +148,7 @@ namespace Mammoth
                 running = true,
                 calibrated = active,
                 calibrating = calibrating,
+                calibrationProgress = active ? 1f : (firstSampleAt.HasValue ? (float)Math.Min(1.0, (now - firstSampleAt.Value) / cfg.calibration) : 0f),
                 visible = new[] { a.HasValue, b.HasValue, c.HasValue },
                 speed = (float)Math.Round(speed * 1000f) / 1000f,
                 travelSpeed = travelSpeed,

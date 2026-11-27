@@ -17,6 +17,8 @@ namespace Mammoth
         public bool running;
         public bool calibrated;
         public bool calibrating;
+        /// <summary>0..1 progress of the 3 s hold-still calibration (in-Unity mapping only; 0 from older sources).</summary>
+        public float calibrationProgress;
         public bool[] visible;
 
         public float speed;        // throttle 0..1

@@ -62,6 +62,43 @@ namespace Mammoth
         float trackingOkSince = -1f;
         float endingStart;
 
+        // Per-role recognition flashes shown above the camera preview columns
+        // (0 speed, 1 direction, 2 jump + trunk), straight from the tracker so
+        // they work on every screen, not only during play.
+        readonly string[] flashText = new string[3];
+        readonly Color[] flashColor = new Color[3];
+        readonly float[] flashUntil = new float[3];
+        int lastSteerDir, lastSpeedBand = -1;
+
+        void Flash(int role, string text, Color c)
+        {
+            flashText[role] = text; flashColor[role] = c; flashUntil[role] = Time.unscaledTime + 1.1f;
+        }
+
+        void UpdateRecognitionFlashes()
+        {
+            var s = receiver != null && receiver.enabled ? receiver.State : null;
+            if (s == null) return;
+            bool dirVisible = s.visible != null && s.visible.Length > 1 && s.visible[1];
+            int dir = 0;
+            if (dirVisible)
+            {
+                float diff = s.rightHand - s.leftHand;
+                if (Mathf.Abs(diff) > 0.5f) dir = diff > 0 ? 1 : -1;
+            }
+            if (dir != 0 && dir != lastSteerDir) Flash(1, dir < 0 ? "Left!" : "Right!", Sky);
+            lastSteerDir = dir;
+
+            bool speedVisible = s.visible != null && s.visible.Length > 0 && s.visible[0];
+            int band = !speedVisible ? -1 : s.speed > 0.7f ? 2 : s.speed < 0.25f ? 0 : 1;
+            if (lastSpeedBand >= 0 && band != lastSpeedBand)
+            {
+                if (band == 2) Flash(0, "Fast!", Rose);
+                else if (band == 0) Flash(0, "Slow", Rose);
+            }
+            lastSpeedBand = band;
+        }
+
         readonly List<(string text, Color color, float until)> toasts = new List<(string, Color, float)>();
 
         // ---- styling ----
@@ -92,6 +129,11 @@ namespace Mammoth
             if (cameraPreview == null) cameraPreview = FindFirstObjectByType<MammothCameraPreview>();
             if (debugHud == null) debugHud = FindFirstObjectByType<MammothDebugHud>();
             if (debugHud != null) debugHud.show = false;
+            if (receiver != null)
+            {
+                receiver.Tracker.OnJump += FlashJump;
+                receiver.Tracker.OnGrab += FlashClap;
+            }
             if (controller != null)
             {
                 controller.OnCollected += HandleCollected;
@@ -101,8 +143,16 @@ namespace Mammoth
             EnterHome();
         }
 
+        void FlashJump() => Flash(2, "Jump!", Mint);
+        void FlashClap() => Flash(2, "Clap!", Butter);
+
         void OnDestroy()
         {
+            if (receiver != null)
+            {
+                receiver.Tracker.OnJump -= FlashJump;
+                receiver.Tracker.OnGrab -= FlashClap;
+            }
             if (controller == null) return;
             controller.OnCollected -= HandleCollected;
             controller.OnEmptyGrab -= HandleEmptyGrab;
@@ -185,6 +235,38 @@ namespace Mammoth
             server?.GetMethod("Start")?.Invoke(null, null);
 #endif
             Application.OpenURL("http://localhost:8080/Web/index.html");
+        }
+
+        float CameraAspect()
+        {
+            if (CameraImage(out var t, out _) && t.height > 0) return Mathf.Clamp((float)t.width / t.height, 1f, 2.4f);
+            return 16f / 9f;
+        }
+
+        /// <summary>Largest rect of the given aspect centered inside area.</summary>
+        static Rect Fit(Rect area, float aspect)
+        {
+            float w = area.width, h = w / aspect;
+            if (h > area.height) { h = area.height; w = h * aspect; }
+            return new Rect(area.x + (area.width - w) * 0.5f, area.y + (area.height - h) * 0.5f, w, h);
+        }
+
+        /// <summary>Pop-up badges ("Jump!", "Left!", ...) above each player column.</summary>
+        void DrawRecognitionBadges(Rect image, float yTop, int fontSize)
+        {
+            float zw = image.width / 3f;
+            for (int i = 0; i < 3; i++)
+            {
+                float left = flashUntil[i] - Time.unscaledTime;
+                if (left <= 0f || string.IsNullOrEmpty(flashText[i])) continue;
+                float a = Mathf.Clamp01(left / 0.3f);
+                float pop = 1f + Mathf.Clamp01((1.1f - left) / 0.12f) * 0f + Mathf.Clamp01(1f - (1.1f - left) / 0.12f) * 0.25f;
+                float bw = Mathf.Min(zw - 6f, 96f) * pop, bh = (fontSize + 12f) * pop;
+                var r = new Rect(image.x + i * zw + (zw - bw) * 0.5f, yTop - bh * 0.5f, bw, bh);
+                var c = flashColor[i]; c.a = a;
+                Panel(r, c);
+                Label(r, flashText[i], centerStyle.WithSize(fontSize).Bold(), new Color(1f, 1f, 1f, a));
+            }
         }
 
         bool CameraImage(out Texture tex, out Rect uv)
@@ -325,6 +407,7 @@ namespace Mammoth
         void Update()
         {
             if (MammothKeys.Down(KeyCode.F1) && debugHud != null) debugHud.show = !debugHud.show;
+            UpdateRecognitionFlashes();
             if (browserMode && receiver != null && receiver.FrameVersion != browserFrameVersion)
             {
                 var bytes = receiver.LatestFrameJpeg;
@@ -616,7 +699,7 @@ namespace Mammoth
             bool previewHere = State == MammothFlowState.Home || State == MammothFlowState.Tutorial || State == MammothFlowState.Practice
                 || State == MammothFlowState.Ready || State == MammothFlowState.Countdown || State == MammothFlowState.Playing || State == MammothFlowState.Paused;
             if (previewHere && !keyboardMode) DrawCameraPreview();
-            if (State == MammothFlowState.Playing || State == MammothFlowState.Tutorial || State == MammothFlowState.Practice) DrawToasts();
+            if (State == MammothFlowState.Playing || State == MammothFlowState.Tutorial || State == MammothFlowState.Practice || State == MammothFlowState.Setup) DrawToasts();
             GUI.matrix = Matrix4x4.identity;
         }
 
@@ -626,7 +709,8 @@ namespace Mammoth
         /// with the three player regions and whether each role is tracked.</summary>
         void DrawCameraPreview()
         {
-            const float w = 212f, h = 159f;
+            const float w = 252f;
+            float h = (w - 12f) / CameraAspect() + 12f;
             var box = new Rect(20f, view.y - h - 20f, w, h);
             Panel(box, new Color(0.2f, 0.18f, 0.25f, 0.92f));
             var inner = new Rect(box.x + 6f, box.y + 6f, w - 12f, h - 12f);
@@ -654,6 +738,7 @@ namespace Mammoth
                 Label(new Rect(zr.x, zr.yMax - 22f, zr.width, 20f), tag[i], centerStyle.WithSize(12).Bold(), Ink);
             }
             GUI.color = old;
+            DrawRecognitionBadges(inner, box.y - 20f, 15);
         }
 
         // ---------------- Home ----------------
@@ -753,25 +838,26 @@ namespace Mammoth
                 return;
             }
 
-            var preview = new Rect(card.x + 40f, card.y + 80f, 520f, 390f);
+            var area = new Rect(card.x + 40f, card.y + 96f, 520f, 374f);
+            var imageRect = Fit(new Rect(area.x + 8f, area.y + 8f, area.width - 16f, area.height - 16f), CameraAspect());
+            var preview = new Rect(imageRect.x - 8f, imageRect.y - 8f, imageRect.width + 16f, imageRect.height + 16f);
             Panel(preview, new Color(0.2f, 0.18f, 0.25f, 1f), false);
             bool camReady = CameraImage(out var tex, out var texUv);
             if (camReady)
             {
-                var inner = new Rect(preview.x + 8f, preview.y + 8f, preview.width - 16f, preview.height - 16f);
                 // Mirrored preview: left on screen is the player's left region.
-                GUI.DrawTextureWithTexCoords(inner, tex, texUv);
+                GUI.DrawTextureWithTexCoords(imageRect, tex, texUv);
             }
             else
                 Label(new Rect(preview.x, preview.y + preview.height * 0.5f - 40f, preview.width, 50f), "No camera image yet", centerStyle.WithSize(20).Bold(), new Color(1f, 1f, 1f, 0.75f));
 
             var s = receiver != null ? receiver.State : null;
             string[] roles = { "Speed", "Direction", "Jump + Trunk" };
-            float zw = (preview.width - 16f) / 3f;
+            float zw = imageRect.width / 3f;
             for (int i = 0; i < 3; i++)
             {
                 bool ok = s != null && s.visible != null && s.visible.Length > i && s.visible[i];
-                var zr = new Rect(preview.x + 8f + i * zw, preview.y + 8f, zw, preview.height - 16f);
+                var zr = new Rect(imageRect.x + i * zw, imageRect.y, zw, imageRect.height);
                 var old = GUI.color;
                 GUI.color = ok ? new Color(0.45f, 0.9f, 0.6f, 0.9f) : new Color(1f, 0.55f, 0.55f, 0.75f);
                 GUI.DrawTexture(new Rect(zr.x, zr.yMax - 40f, zr.width - 4f, 40f), whiteTex);
@@ -780,8 +866,10 @@ namespace Mammoth
                 Label(new Rect(zr.x, zr.yMax - 40f, zr.width - 4f, 40f), roles[i] + (ok ? "  OK" : ""), centerStyle.WithSize(17).Bold(), Ink);
             }
 
+            DrawRecognitionBadges(imageRect, imageRect.y + 24f, 18);
+
             // Status column
-            float sx = preview.xMax + 30f, sw = card.xMax - 40f - sx;
+            float sx = area.xMax + 30f, sw = card.xMax - 40f - sx;
             string status;
             Color statusColor = InkSoft;
             bool calibrated = receiver != null && receiver.ControlAllowed;
@@ -800,25 +888,49 @@ namespace Mammoth
                     statusColor = Warn;
                 }
             }
-            else if (calibrated) { status = "<b>Calibrated.</b>\nLower your hands and keep them apart."; statusColor = Ink; }
             else
             {
-                status = "Stand in your regions. Lower your hands and keep them apart.";
-                if (s != null && s.visible != null)
-                {
-                    var missing = new List<string>();
-                    for (int i = 0; i < 3 && i < s.visible.Length; i++) if (!s.visible[i]) missing.Add(roles[i]);
-                    if (missing.Count > 0) status += "\n\nMissing: " + string.Join(", ", missing);
-                    else status += "\n\nHold still for 3 seconds...";
-                }
+                // Calibration, step by step: 1 everyone in their region,
+                // 2 hands down and apart, 3 hold still for 3 seconds.
+                var miss = new List<string>();
+                bool allIn = s != null && s.visible != null && s.visible.Length >= 3;
+                if (allIn) for (int i = 0; i < 3; i++) if (!s.visible[i]) { miss.Add(roles[i]); allIn = false; }
+                if (s == null || s.visible == null) miss.AddRange(roles);
+                float prog = s != null ? s.calibrationProgress : 0f;
+                if (calibrated) prog = 1f;
+                status = null;
+                float y = card.y + 92f;
+                Label(new Rect(sx, y, sw, 28f), "Calibration", labelStyle.WithSize(20).Bold(), Acorn); y += 34f;
+                CalibStep(sx, ref y, sw, "1  Everyone in their region", allIn || calibrated, allIn || calibrated ? null : "Missing: " + string.Join(", ", miss));
+                CalibStep(sx, ref y, sw, "2  Hands down and apart", calibrated || prog > 0f, null);
+                CalibStep(sx, ref y, sw, "3  Hold still for 3 seconds", calibrated, null);
+                var bar = new Rect(sx, y + 6f, sw, 14f);
+                var oldc = GUI.color;
+                GUI.color = new Color(0.88f, 0.86f, 0.9f); Pill(bar);
+                if (prog > 0.02f) { GUI.color = calibrated ? Mint : Acorn; Pill(new Rect(bar.x, bar.y, Mathf.Max(14f, bar.width * prog), bar.height)); }
+                GUI.color = oldc;
+                Label(new Rect(sx, y + 26f, sw, 24f), calibrated ? "Calibrated. Keep your hands down." : (prog > 0f ? "Calibrating... hold still" : "Waiting for all three players"), smallStyle, calibrated ? Mint : InkSoft);
             }
-            Label(new Rect(sx, card.y + 90f, sw, 300f), status, labelStyle.WithSize(19), statusColor);
+            if (status != null) Label(new Rect(sx, card.y + 90f, sw, 200f), status, labelStyle.WithSize(19), statusColor);
 
             if (Button(new Rect(card.x + w - 260f, card.y + h - 76f, 220f, 52f), "Continue", Acorn, calibrated)) AfterSetup();
             if (Button(new Rect(card.x + 40f, card.y + h - 76f, 150f, 52f), "Back", Lilac)) EnterHome();
             if (Button(new Rect(card.x + 210f, card.y + h - 76f, 230f, 52f), "Keyboard test mode", Sky)) UseKeyboard(true);
-            if (!browserMode && Button(new Rect(sx, card.y + 300f, sw, 54f), "Use Chrome camera", Mint)) UseBrowserCamera();
-            else if (browserMode && Button(new Rect(sx, card.y + 300f, sw, 54f), "Open camera page again", Mint)) UseBrowserCamera();
+            if (!browserMode && !camReady && Button(new Rect(sx, card.y + 330f, sw, 54f), "Use Chrome camera", Mint)) UseBrowserCamera();
+            else if (browserMode && !calibrated && Button(new Rect(sx, card.y + 330f, sw, 54f), "Reopen camera page", Mint)) UseBrowserCamera();
+            if (!browserMode && camReady && !calibrated && Button(new Rect(sx, card.y + 330f, sw, 50f), "Skip calibration (test)", Lilac))
+            {
+                receiver.ForceCalibrate();
+                AddToast("Calibration skipped: keyboard covers empty roles", Butter, 2.5f);
+            }
+        }
+
+        void CalibStep(float x, ref float y, float w, string text, bool done, string note)
+        {
+            Circle(new Rect(x, y + 3f, 18f, 18f), done ? Mint : new Color(0.85f, 0.83f, 0.88f));
+            Label(new Rect(x + 28f, y, w - 28f, 26f), text, labelStyle.WithSize(17), done ? Ink : InkSoft);
+            y += 28f;
+            if (note != null) { Label(new Rect(x + 28f, y - 4f, w - 28f, 40f), note, smallStyle.WithSize(14), Warn); y += 36f; }
         }
 
         // ---------------- Tutorial ----------------

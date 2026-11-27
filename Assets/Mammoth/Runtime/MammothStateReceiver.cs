@@ -51,6 +51,14 @@ namespace Mammoth
 
         MammothGestureMapping mapping;
 
+        /// <summary>In-Unity camera mode only: skip the hold-still calibration (testing).</summary>
+        public bool ForceCalibrate()
+        {
+            if (mode != MammothSourceMode.InUnityCamera || mapping == null) return false;
+            mapping.ForceCalibrate();
+            return true;
+        }
+
         [Header("Common")]
         [Tooltip("Abort a request / treat tracking as lost after this many seconds without a fresh state.")]
         public float receiveTimeout = 0.5f;

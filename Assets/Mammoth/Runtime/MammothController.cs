@@ -250,6 +250,25 @@ namespace Mammoth
                 float mag = Mathf.InverseLerp(steerDeadzone, steerFull, Mathf.Abs(diff));
                 steer = Mathf.Sign(diff) * mag * mag * (3f - 2f * mag);
             }
+
+            // Keyboard fills in for any role nobody is standing in (solo or
+            // short-handed testing): W/S speed, A/D steer, Space jump, E grab.
+            if (!keyboardFallback) return;
+            bool speedSeen = s != null && s.visible != null && s.visible.Length > 0 && s.visible[0];
+            float kTarget = MammothKeys.Held(KeyCode.W) ? cfg.max_speed
+                          : MammothKeys.Held(KeyCode.S) ? cfg.min_speed
+                          : Mathf.Lerp(cfg.min_speed, cfg.max_speed, 0.4f);
+            float a = 1f - Mathf.Exp(-Mathf.Min(Time.deltaTime, .2f) / cfg.smooth);
+            keySpeed += (kTarget - keySpeed) * a;
+            if (!speedSeen)
+            {
+                speed = keySpeed;
+                throttle = Mathf.InverseLerp(cfg.min_speed, cfg.max_speed, keySpeed);
+            }
+            float kSteer = (MammothKeys.Held(KeyCode.D) ? 1f : 0f) - (MammothKeys.Held(KeyCode.A) ? 1f : 0f);
+            if (kSteer != 0f) steer = kSteer;
+            if (MammothKeys.Down(KeyCode.Space)) HandleJump();
+            if (MammothKeys.Down(KeyCode.E)) HandleGrab();
         }
 
         void HandleJump()
