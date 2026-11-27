@@ -41,17 +41,19 @@ namespace Mammoth.EditorTools
         static readonly Color MountainPastel2 = new Color(0.88f, 0.72f, 0.60f);
         static readonly Color SnowCream = new Color(0.99f, 0.95f, 0.88f);
 
-        // Low-poly pom-pom tree + cloud palette — kept saturated so trees pop
-        // against the pale ground instead of blending into it.
+        // Low-poly pom-pom tree + cloud palette. Kept in the same soft,
+        // slightly muted family as the rest of the ice palette (mostly sage
+        // and mint greens) instead of a scattershot of fully saturated
+        // candy hues, so a cluster of trees reads as one forest rather than
+        // mismatched gems; one dusty-blossom tone is mixed in as a rare accent.
         static readonly Color TreeTrunk = new Color(0.55f, 0.42f, 0.30f);
         static readonly Color[] TreeFoliage =
         {
-            new Color(0.42f, 0.78f, 0.80f),
-            new Color(0.95f, 0.62f, 0.72f),
-            new Color(0.95f, 0.85f, 0.45f),
-            new Color(0.55f, 0.82f, 0.60f),
-            new Color(0.70f, 0.62f, 0.90f),
+            new Color(0.56f, 0.74f, 0.56f),
+            new Color(0.64f, 0.80f, 0.60f),
+            new Color(0.70f, 0.76f, 0.52f),
         };
+        static readonly Color TreeBlossom = new Color(0.86f, 0.70f, 0.74f);
         static readonly Color CloudWhite = new Color(0.99f, 0.98f, 0.97f);
 
         [MenuItem("Mammoth/Create Demo Scene")]
@@ -307,15 +309,20 @@ namespace Mammoth.EditorTools
                         tree.transform.rotation = Quaternion.Euler(0, (float)rng.NextDouble() * 360f, 0);
                         tree.transform.localScale = Vector3.one * scale;
 
+                        // Taller, clearly visible trunk (was almost entirely hidden
+                        // under the foliage ball before), so the tree reads as a
+                        // trunk-with-canopy instead of a ball sitting on the ground.
                         Part(tree, PrimitiveType.Cylinder, "Trunk",
-                            new Vector3(0, 0.14f, 0), new Vector3(0.09f, 0.14f, 0.09f), TreeTrunk);
+                            new Vector3(0, 0.35f, 0), new Vector3(0.1f, 0.35f, 0.1f), TreeTrunk);
 
                         int balls = rng.NextDouble() < 0.3 ? 2 : 1;
-                        float y = 0.3f;
-                        Color foliage = TreeFoliage[rng.Next(TreeFoliage.Length)];
+                        float y = 0.68f;
+                        Color foliage = rng.NextDouble() < 0.82
+                            ? TreeFoliage[rng.Next(TreeFoliage.Length)]
+                            : TreeBlossom;
                         for (int b = 0; b < balls; b++)
                         {
-                            float ballScale = Mathf.Lerp(0.5f, 0.36f, balls <= 1 ? 0f : b / (float)(balls - 1));
+                            float ballScale = Mathf.Lerp(0.38f, 0.26f, balls <= 1 ? 0f : b / (float)(balls - 1));
                             var ball = new GameObject("Foliage");
                             ball.transform.SetParent(tree.transform, false);
                             ball.transform.localPosition = new Vector3(0, y, 0);
@@ -324,7 +331,7 @@ namespace Mammoth.EditorTools
                             var fmr = ball.AddComponent<MeshRenderer>();
                             fmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(seed * 7 + b * 5 + 3, jitter: 0.1f, subdivisions: 1);
                             fmr.sharedMaterial = MakeMaterial(foliage);
-                            y += ballScale * 0.8f;
+                            y += ballScale * 0.75f;
                         }
                     }
                 }
