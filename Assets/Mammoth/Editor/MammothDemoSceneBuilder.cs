@@ -673,10 +673,7 @@ namespace Mammoth.EditorTools
         static void BuildLandmarks()
         {
             var group = new GameObject("Landmarks");
-            Sign(group.transform, new Vector3(-5.6f, 0f, 9f), "Over the\nmountain");
-            Sign(group.transform, new Vector3(5.6f, 0f, 112f), "Uphill");
-            Sign(group.transform, new Vector3(-5.6f, 0f, 238f), "Summit");
-            Sign(group.transform, new Vector3(5.6f, 0f, 276f), "Downhill\nslow down");
+            // No roadside text signs: the on-screen prompts carry the route story.
 
             // Prayer-flag style pennants strung along the flat summit.
             Color[] flagCols = { new Color(0.97f, 0.62f, 0.62f), new Color(0.99f, 0.85f, 0.5f), new Color(0.6f, 0.85f, 0.7f), new Color(0.6f, 0.75f, 0.97f), new Color(0.8f, 0.7f, 0.95f) };
