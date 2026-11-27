@@ -187,9 +187,12 @@ namespace Mammoth.EditorTools
             for (int i = 0; i < 26; i++)
             {
                 int side = i % 2 == 0 ? -1 : 1;
-                float x = side * (lane * 1.9f + (float)rng.NextDouble() * lane * 1.6f);
+                // Kept in a tighter band close to the track, with a capped max
+                // scale, so the biggest icebergs can't reach out far enough to
+                // overlap the tree clusters planted further out.
+                float x = side * (lane * 1.5f + (float)rng.NextDouble() * lane * 0.9f);
                 float z = (float)rng.NextDouble() * 500f;
-                float scale = Mathf.Lerp(1.4f, 4.2f, (float)rng.NextDouble());
+                float scale = Mathf.Lerp(1.2f, 2.8f, (float)rng.NextDouble());
 
                 var go = new GameObject("Iceberg");
                 go.transform.SetParent(field.transform);
@@ -207,7 +210,7 @@ namespace Mammoth.EditorTools
             for (int i = 0; i < 8; i++)
             {
                 int side = i % 2 == 0 ? -1 : 1;
-                float x = side * (lane * 2.4f + (float)rng.NextDouble() * lane);
+                float x = side * (lane * 1.8f + (float)rng.NextDouble() * lane * 0.8f);
                 float z = 40f + (float)rng.NextDouble() * 440f;
                 var go = new GameObject("Accent Crystal");
                 go.transform.SetParent(field.transform);
@@ -243,8 +246,8 @@ namespace Mammoth.EditorTools
                 // Taller-relative-to-base than before (narrower, sharper silhouette),
                 // matching the referenced low-poly mountain art's steep peaks rather
                 // than wide squat domes.
-                BuildMountainRow(field, side, lane * 9f, step: 11f, heightMin: 7f, heightMax: 14f, baseMin: 4f, baseMax: 6.5f, ref seed);
-                BuildMountainRow(field, side, lane * 14f, step: 15f, heightMin: 14f, heightMax: 28f, baseMin: 6f, baseMax: 9f, ref seed);
+                BuildMountainRow(field, side, lane * 9f, step: 11f, heightMin: 7f, heightMax: 13f, baseMin: 4f, baseMax: 7f, ref seed);
+                BuildMountainRow(field, side, lane * 14f, step: 15f, heightMin: 14f, heightMax: 22f, baseMin: 7f, baseMax: 10f, ref seed);
             }
         }
 
@@ -300,12 +303,16 @@ namespace Mammoth.EditorTools
             {
                 foreach (int side in new[] { -1, 1 })
                 {
-                    float clusterX = side * (lane * (1.7f + (float)rng.NextDouble() * 1.4f));
+                    // Pulled well past the iceberg field's farthest reach (see
+                    // BuildIcebergField) so the tree clusters never clip into the
+                    // icebergs, with a tighter cross-track jitter so individual
+                    // trees in a cluster can't drift back in either.
+                    float clusterX = side * (lane * (5.0f + (float)rng.NextDouble() * 1.2f));
                     float clusterZ = z + ((float)rng.NextDouble() - 0.5f) * step * 0.4f;
                     int count = rng.Next(3, 6);
                     for (int t = 0; t < count; t++)
                     {
-                        float x = clusterX + ((float)rng.NextDouble() - 0.5f) * 2.2f;
+                        float x = clusterX + ((float)rng.NextDouble() - 0.5f) * 1.6f;
                         float zPos = clusterZ + ((float)rng.NextDouble() - 0.5f) * 2.2f;
                         float scale = Mathf.Lerp(1.05f, 1.85f, (float)rng.NextDouble());
                         int seed = seedBase++;
@@ -494,31 +501,37 @@ namespace Mammoth.EditorTools
                 r.transform.position = new Vector3(l * lane, y, 15f + i * 12f);
                 r.transform.localScale = Vector3.one * (air ? .62f : .55f);
 
-                // Nut body: BuildMountainPeak is a cone that tapers from a wide
-                // jittered ring at y=0 up to a point at y=1 — flipping it 180°
-                // keeps the wide ring at y=0 (top, under the cap) and sends the
-                // point hanging down, giving the classic tapered-teardrop acorn
-                // silhouette instead of a plain stretched blob.
+                // Nut body: a rounded, chunky low-poly egg shape (BuildIceChunk at
+                // subdivisions:1, same roundness tier used for tree canopies),
+                // stretched a bit taller than wide — not BuildMountainPeak's cone,
+                // which tapered to a sharp point and read as a diamond, not a nut.
                 var nut = new GameObject("Acorn Nut");
                 nut.transform.SetParent(r.transform, false);
-                nut.transform.localRotation = Quaternion.Euler(180f, 0f, 0f);
-                nut.transform.localScale = new Vector3(0.78f, 0.92f, 0.78f);
+                nut.transform.localPosition = new Vector3(0, -0.5f, 0);
+                nut.transform.localScale = new Vector3(0.74f, 0.55f, 0.74f);
                 var nmf = nut.AddComponent<MeshFilter>();
                 var nmr = nut.AddComponent<MeshRenderer>();
-                nmf.sharedMesh = LowPolyMeshUtil.BuildMountainPeak(i * 31 + 9, baseJitter: 0.1f, sides: 7, tiers: 1);
+                nmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 31 + 9, jitter: 0.14f, subdivisions: 1);
                 nmr.sharedMaterial = MakeMaterial(air ? AcornNutAir : AcornNutGround);
 
-                // Cap: a shallow flattened disc sitting right at the nut's wide
-                // top ring (y=0), slightly wider than the ring so it overlaps
-                // down over the rim like a real acorn cap.
+                // Cap: a round, chunky low-poly beret (subdivisions:1, not the old
+                // sharp-faceted diamond at subdivisions:0), slightly wider than the
+                // nut so it overlaps down over the rim like a real acorn cap.
                 var cap = new GameObject("Acorn Cap");
                 cap.transform.SetParent(r.transform, false);
-                cap.transform.localPosition = new Vector3(0, 0.04f, 0);
-                cap.transform.localScale = new Vector3(0.86f, 0.4f, 0.86f);
+                cap.transform.localPosition = new Vector3(0, 0.15f, 0);
+                cap.transform.localScale = new Vector3(0.88f, 0.35f, 0.88f);
                 var cmf = cap.AddComponent<MeshFilter>();
                 var cmr = cap.AddComponent<MeshRenderer>();
-                cmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 31 + 20, jitter: 0.08f, subdivisions: 0);
+                cmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 31 + 20, jitter: 0.1f, subdivisions: 1);
                 cmr.sharedMaterial = MakeMaterial(air ? AcornCapAir : AcornCapGround);
+
+                // Small angled twig/stem nub poking out of the top of the cap,
+                // matching the reference art's acorn shape.
+                var stem = Part(r, PrimitiveType.Cylinder, "Acorn Stem",
+                    new Vector3(0.09f, 0.44f, 0f), new Vector3(0.045f, 0.12f, 0.045f),
+                    air ? AcornCapAir : AcornCapGround, flat: true);
+                stem.transform.localRotation = Quaternion.Euler(0f, 0f, 28f);
 
                 r.AddComponent<MammothReward>().points = air ? 3 : 1;
             }

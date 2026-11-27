@@ -221,20 +221,26 @@ namespace Mammoth.Art
                 baseVerts[i] = new Vector3(Mathf.Cos(angle) * r, 0f, Mathf.Sin(angle) * r);
             }
 
-            int spikePeak = rng.NextDouble() < 0.4 ? rng.Next(peaks) : -1;
+            // Spike accent kept rare and mild: a tall, leaning, often-bare-rock
+            // peak used to read as a thin gray needle poking through the ridge
+            // (especially once stretched by the mountain's own non-uniform
+            // height:base scale), not a rounded accent. Lower probability,
+            // height multiplier, and lean keep every peak closer to the main
+            // ridge's rounded silhouette.
+            int spikePeak = rng.NextDouble() < 0.15 ? rng.Next(peaks) : -1;
             var apexPos = new Vector3[peaks];
             var hasSnow = new bool[peaks];
             for (int p = 0; p < peaks; p++)
             {
                 float midAngle = ((p * 3 + 1) / (float)sides) * Mathf.PI * 2f;
                 float height = Mathf.Lerp(0.75f, 1.05f, (float)rng.NextDouble());
-                if (p == spikePeak) height *= 1.3f; // one tall, narrow accent spike
-                float lean = Mathf.Lerp(0f, 0.18f, (float)rng.NextDouble());
+                if (p == spikePeak) height *= 1.12f; // one slightly taller accent peak
+                float lean = Mathf.Lerp(0f, 0.07f, (float)rng.NextDouble());
                 apexPos[p] = new Vector3(Mathf.Cos(midAngle) * lean, height, Mathf.Sin(midAngle) * lean);
                 // A bare solid-rock spike (no snow) for variety, like a sheltered
                 // crag too steep to hold snow — skipped for very short peaks so
                 // every mountain still shows at least some snow overall.
-                hasSnow[p] = !(p == spikePeak && rng.NextDouble() < 0.6);
+                hasSnow[p] = !(p == spikePeak && rng.NextDouble() < 0.3);
             }
 
             var rockTris = new System.Collections.Generic.List<Vector3>();
