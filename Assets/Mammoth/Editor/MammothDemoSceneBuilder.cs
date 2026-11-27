@@ -168,7 +168,7 @@ namespace Mammoth.EditorTools
 
                 var mf = go.AddComponent<MeshFilter>();
                 var mr = go.AddComponent<MeshRenderer>();
-                mf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 97 + 5, jitter: 0.32f, subdivisions: 2);
+                mf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 97 + 5, jitter: 0.32f, subdivisions: 1);
                 mr.sharedMaterial = MakeMaterial(Color.Lerp(Ice3, SnowWhite, (float)rng.NextDouble() * 0.6f));
             }
 
@@ -186,7 +186,7 @@ namespace Mammoth.EditorTools
                 go.transform.localScale = Vector3.one * scale;
                 var mf = go.AddComponent<MeshFilter>();
                 var mr = go.AddComponent<MeshRenderer>();
-                mf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 53 + 2, jitter: 0.22f, subdivisions: 1);
+                mf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 53 + 2, jitter: 0.22f, subdivisions: 0);
                 mr.sharedMaterial = MakeMaterial(BlushPink);
             }
         }
@@ -248,7 +248,7 @@ namespace Mammoth.EditorTools
                 cap.transform.localScale = Vector3.one * (baseScale * 0.62f);
                 var cmf = cap.AddComponent<MeshFilter>();
                 var cmr = cap.AddComponent<MeshRenderer>();
-                cmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(seed * 113 + 41, jitter: 0.25f, subdivisions: 1);
+                cmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(seed * 113 + 41, jitter: 0.25f, subdivisions: 0);
                 cmr.sharedMaterial = MakeMaterial(SnowWhite);
 
                 seed++;
@@ -334,6 +334,19 @@ namespace Mammoth.EditorTools
             return mammoth;
         }
 
+        static readonly Color AcornNutGround = new Color(0.90f, 0.70f, 0.35f);
+        static readonly Color AcornCapGround = new Color(0.46f, 0.30f, 0.16f);
+        static readonly Color AcornNutAir = new Color(0.80f, 0.92f, 0.98f);
+        static readonly Color AcornCapAir = new Color(0.40f, 0.62f, 0.80f);
+
+        /// <summary>
+        /// Reward pickups are low-poly acorns: a rounded nut body plus a separate,
+        /// flattened cap on top. Ground rewards (reachable without jumping, worth
+        /// 1 point) use a warm gold-and-brown acorn palette. Air rewards (only
+        /// reachable by jumping, worth 3 points) use a frosty icy-blue palette
+        /// instead, so the two are told apart by color/material at a glance, not
+        /// just by height.
+        /// </summary>
         static void BuildRewards(float lane, MammothSettings cfg)
         {
             var rewards = new GameObject("Rewards");
@@ -346,11 +359,25 @@ namespace Mammoth.EditorTools
                 var r = new GameObject(air ? "Reward (air)" : "Reward");
                 r.transform.SetParent(rewards.transform);
                 r.transform.position = new Vector3(l * lane, y, 15f + i * 12f);
-                r.transform.localScale = Vector3.one * .55f;
-                var mf = r.AddComponent<MeshFilter>();
-                var mr = r.AddComponent<MeshRenderer>();
-                mf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 31 + 9, jitter: 0.18f, subdivisions: 2);
-                mr.sharedMaterial = MakeMaterial(air ? Color.Lerp(BlushPink, SnowWhite, .3f) : new Color(1f, .85f, .4f));
+                r.transform.localScale = Vector3.one * (air ? .62f : .55f);
+
+                var nut = new GameObject("Acorn Nut");
+                nut.transform.SetParent(r.transform, false);
+                nut.transform.localScale = new Vector3(0.9f, 1.15f, 0.9f);
+                var nmf = nut.AddComponent<MeshFilter>();
+                var nmr = nut.AddComponent<MeshRenderer>();
+                nmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 31 + 9, jitter: 0.14f, subdivisions: 1);
+                nmr.sharedMaterial = MakeMaterial(air ? AcornNutAir : AcornNutGround);
+
+                var cap = new GameObject("Acorn Cap");
+                cap.transform.SetParent(r.transform, false);
+                cap.transform.localPosition = new Vector3(0, 0.62f, 0);
+                cap.transform.localScale = new Vector3(1.08f, 0.5f, 1.08f);
+                var cmf = cap.AddComponent<MeshFilter>();
+                var cmr = cap.AddComponent<MeshRenderer>();
+                cmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 31 + 20, jitter: 0.1f, subdivisions: 0);
+                cmr.sharedMaterial = MakeMaterial(air ? AcornCapAir : AcornCapGround);
+
                 r.AddComponent<MammothReward>().points = air ? 3 : 1;
             }
         }
