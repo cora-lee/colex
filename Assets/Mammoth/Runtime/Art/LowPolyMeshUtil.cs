@@ -114,13 +114,15 @@ namespace Mammoth.Art
         /// <summary>
         /// Builds a low-poly mountain peak: a flat, jittered-radius base ring at
         /// local y=0 (so it sits flush with the ground with no gap underneath),
-        /// then a stack of intermediate rings (each jittered in both radius and
-        /// height) tapering up to a single jittered apex at local y=1. The extra
-        /// rings are what read as "piled snow" rather than a bare geometric cone
-        /// — a single-ring cone (the old shape) has too few facets to catch light
-        /// unevenly the way a snowdrift does.
+        /// then a stack of intermediate rings tapering up to a single apex at
+        /// local y=1. The radius profile eases out slowly at first (quadratic),
+        /// so the mound stays wide and round through the lower-mid tiers and only
+        /// narrows sharply near the top — a plump snow-pile silhouette. Per-vertex
+        /// jitter is kept light: enough to add a handful of facets that catch
+        /// light unevenly like packed snow, not so much that the panels buckle
+        /// into a wrinkled/crumpled look.
         /// </summary>
-        public static Mesh BuildMountainPeak(int seed, float baseJitter = 0.3f, int sides = 9, int tiers = 3)
+        public static Mesh BuildMountainPeak(int seed, float baseJitter = 0.3f, int sides = 8, int tiers = 2)
         {
             var rng = new System.Random(seed);
             var verts = new System.Collections.Generic.List<Vector3> { Vector3.zero }; // [0] base center
@@ -132,14 +134,18 @@ namespace Mammoth.Art
                 float tFrac = t / (float)(tiers + 1); // 0 at the base ring, <1 at the last ring before the apex point
                 // Eased rather than linear so the silhouette bulges through the
                 // middle tiers instead of tapering as a straight-sided pyramid.
-                float y = Mathf.Clamp01(Mathf.Pow(tFrac, 0.8f) + (t == 0 ? 0f : ((float)rng.NextDouble() * 2f - 1f) * 0.06f));
-                float radius = Mathf.Lerp(1f, 0.15f, tFrac);
+                float y = Mathf.Clamp01(Mathf.Pow(tFrac, 0.8f) + (t == 0 ? 0f : ((float)rng.NextDouble() * 2f - 1f) * 0.03f));
+                // Quadratic ease keeps the radius close to full width through the
+                // lower-mid tiers (plump/round), then falls off faster near the
+                // top, instead of a straight linear taper (which read as "wrinkled"
+                // once combined with per-vertex jitter).
+                float radius = Mathf.Lerp(1f, 0.15f, tFrac * tFrac);
 
                 int ringStart = verts.Count;
                 for (int i = 0; i < sides; i++)
                 {
                     float angle = (i / (float)sides) * Mathf.PI * 2f;
-                    float r = radius * (1f + ((float)rng.NextDouble() * 2f - 1f) * baseJitter * (t == 0 ? 1f : 0.7f));
+                    float r = radius * (1f + ((float)rng.NextDouble() * 2f - 1f) * baseJitter * (t == 0 ? 0.55f : 0.22f));
                     verts.Add(new Vector3(Mathf.Cos(angle) * r, y, Mathf.Sin(angle) * r));
                 }
 
@@ -166,9 +172,9 @@ namespace Mammoth.Art
                 prevRingStart = ringStart;
             }
 
-            float apexX = ((float)rng.NextDouble() * 2f - 1f) * 0.12f;
-            float apexZ = ((float)rng.NextDouble() * 2f - 1f) * 0.12f;
-            float apexY = 1f + ((float)rng.NextDouble() * 2f - 1f) * 0.08f;
+            float apexX = ((float)rng.NextDouble() * 2f - 1f) * 0.06f;
+            float apexZ = ((float)rng.NextDouble() * 2f - 1f) * 0.06f;
+            float apexY = 1f + ((float)rng.NextDouble() * 2f - 1f) * 0.04f;
             int apexIdx = verts.Count;
             verts.Add(new Vector3(apexX, apexY, apexZ));
             for (int i = 0; i < sides; i++)

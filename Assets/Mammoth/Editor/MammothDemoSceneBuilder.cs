@@ -238,7 +238,7 @@ namespace Mammoth.EditorTools
 
                 var mf = go.AddComponent<MeshFilter>();
                 var mr = go.AddComponent<MeshRenderer>();
-                mf.sharedMesh = LowPolyMeshUtil.BuildMountainPeak(seed * 71 + 13, baseJitter: 0.3f, sides: 9, tiers: 3);
+                mf.sharedMesh = LowPolyMeshUtil.BuildMountainPeak(seed * 71 + 13, baseJitter: 0.25f, sides: 8, tiers: 2);
                 mr.sharedMaterial = MakeMaterial(Color.Lerp(MountainRock, Ice3, MountainTints[rng.Next(MountainTints.Length)]));
 
                 var cap = new GameObject("Snow Cap");
