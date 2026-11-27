@@ -190,5 +190,104 @@ namespace Mammoth.Art
             mesh.RecalculateBounds();
             return Flatten(mesh);
         }
+
+        /// <summary>
+        /// Builds a jagged low-poly "mountain ridge": a cluster of 2-3 angular
+        /// pyramidal peaks sharing one base ring, each peak split at a snow-line
+        /// into a lower rock frustum (submesh 0) and an upper snow-tip cone
+        /// (submesh 1). Deliberately built from a handful of large, flat planes
+        /// with only mild per-vertex noise on the base ring — not heavy per-vertex
+        /// jitter — so the silhouette reads as clean folded-paper facets (like
+        /// stylized low-poly mountain illustrations) rather than a crumpled blob.
+        /// Assign a rock-tone material to submesh 0 and a snow-tone material to
+        /// submesh 1 on the MeshRenderer to get the two-tone look with perfect
+        /// alignment (no separate floating snow-cap prop needed).
+        /// </summary>
+        public static Mesh BuildMountainRidge(int seed, int peaks = 2, float baseJitter = 0.08f, float snowLine = 0.55f)
+        {
+            var rng = new System.Random(seed);
+            int sides = peaks * 3;
+
+            var baseVerts = new Vector3[sides];
+            for (int i = 0; i < sides; i++)
+            {
+                float angle = (i / (float)sides) * Mathf.PI * 2f;
+                float r = 1f + ((float)rng.NextDouble() * 2f - 1f) * baseJitter;
+                baseVerts[i] = new Vector3(Mathf.Cos(angle) * r, 0f, Mathf.Sin(angle) * r);
+            }
+
+            var apexPos = new Vector3[peaks];
+            for (int p = 0; p < peaks; p++)
+            {
+                float midAngle = ((p * 3 + 1) / (float)sides) * Mathf.PI * 2f;
+                float height = Mathf.Lerp(0.72f, 1f, (float)rng.NextDouble());
+                float lean = Mathf.Lerp(0f, 0.22f, (float)rng.NextDouble());
+                apexPos[p] = new Vector3(Mathf.Cos(midAngle) * lean, height, Mathf.Sin(midAngle) * lean);
+            }
+
+            var rockTris = new System.Collections.Generic.List<Vector3>();
+            var snowTris = new System.Collections.Generic.List<Vector3>();
+            Vector3 center = Vector3.zero;
+
+            for (int p = 0; p < peaks; p++)
+            {
+                Vector3 apex = apexPos[p];
+                var v = new Vector3[4];
+                var s = new Vector3[4];
+                for (int k = 0; k < 4; k++)
+                {
+                    v[k] = baseVerts[(p * 3 + k) % sides];
+                    s[k] = Vector3.Lerp(v[k], apex, snowLine);
+                }
+
+                // Base cap (downward normal) — hidden at ground level, rock-colored.
+                rockTris.Add(center); rockTris.Add(v[0]); rockTris.Add(v[1]);
+                rockTris.Add(center); rockTris.Add(v[1]); rockTris.Add(v[2]);
+                rockTris.Add(center); rockTris.Add(v[2]); rockTris.Add(v[3]);
+
+                for (int k = 0; k < 3; k++)
+                {
+                    // Rock frustum quad (base ring -> snow-line ring).
+                    rockTris.Add(v[k]); rockTris.Add(s[k]); rockTris.Add(s[k + 1]);
+                    rockTris.Add(v[k]); rockTris.Add(s[k + 1]); rockTris.Add(v[k + 1]);
+                    // Snow cone (snow-line ring -> apex).
+                    snowTris.Add(s[k]); snowTris.Add(apex); snowTris.Add(s[k + 1]);
+                }
+            }
+
+            int rockCount = rockTris.Count;
+            int snowCount = snowTris.Count;
+            var allVerts = new Vector3[rockCount + snowCount];
+            var allNormals = new Vector3[rockCount + snowCount];
+            for (int i = 0; i < rockCount; i += 3)
+            {
+                Vector3 a = rockTris[i], b = rockTris[i + 1], c = rockTris[i + 2];
+                Vector3 n = Vector3.Cross(b - a, c - a).normalized;
+                allVerts[i] = a; allVerts[i + 1] = b; allVerts[i + 2] = c;
+                allNormals[i] = n; allNormals[i + 1] = n; allNormals[i + 2] = n;
+            }
+            for (int i = 0; i < snowCount; i += 3)
+            {
+                Vector3 a = snowTris[i], b = snowTris[i + 1], c = snowTris[i + 2];
+                Vector3 n = Vector3.Cross(b - a, c - a).normalized;
+                int o = rockCount + i;
+                allVerts[o] = a; allVerts[o + 1] = b; allVerts[o + 2] = c;
+                allNormals[o] = n; allNormals[o + 1] = n; allNormals[o + 2] = n;
+            }
+
+            var rockIdx = new int[rockCount];
+            for (int i = 0; i < rockCount; i++) rockIdx[i] = i;
+            var snowIdx = new int[snowCount];
+            for (int i = 0; i < snowCount; i++) snowIdx[i] = rockCount + i;
+
+            var mesh = new Mesh { name = "MountainRidge" };
+            mesh.vertices = allVerts;
+            mesh.normals = allNormals;
+            mesh.subMeshCount = 2;
+            mesh.SetTriangles(rockIdx, 0);
+            mesh.SetTriangles(snowIdx, 1);
+            mesh.RecalculateBounds();
+            return mesh;
+        }
     }
 }
