@@ -37,18 +37,20 @@ namespace Mammoth.EditorTools
         // Soft pastel mountain palette (dusty mauve/lavender body, warm cream
         // snow tips) in place of the old dark blue-grey rock, so angular peaks
         // read as gentle folded-paper shapes instead of harsh ice crags.
-        static readonly Color MountainPastel1 = new Color(0.72f, 0.66f, 0.78f);
-        static readonly Color MountainPastel2 = new Color(0.80f, 0.70f, 0.72f);
-        static readonly Color SnowCream = new Color(0.97f, 0.94f, 0.90f);
+        static readonly Color MountainPastel1 = new Color(0.82f, 0.60f, 0.58f);
+        static readonly Color MountainPastel2 = new Color(0.88f, 0.72f, 0.60f);
+        static readonly Color SnowCream = new Color(0.99f, 0.95f, 0.88f);
 
-        // Low-poly pom-pom tree + cloud palette.
+        // Low-poly pom-pom tree + cloud palette — kept saturated so trees pop
+        // against the pale ground instead of blending into it.
         static readonly Color TreeTrunk = new Color(0.55f, 0.42f, 0.30f);
         static readonly Color[] TreeFoliage =
         {
-            new Color(0.62f, 0.80f, 0.70f),
-            new Color(0.70f, 0.85f, 0.78f),
-            new Color(0.98f, 0.82f, 0.86f),
-            new Color(0.95f, 0.88f, 0.70f),
+            new Color(0.42f, 0.78f, 0.80f),
+            new Color(0.95f, 0.62f, 0.72f),
+            new Color(0.95f, 0.85f, 0.45f),
+            new Color(0.55f, 0.82f, 0.60f),
+            new Color(0.70f, 0.62f, 0.90f),
         };
         static readonly Color CloudWhite = new Color(0.99f, 0.98f, 0.97f);
 
@@ -229,8 +231,11 @@ namespace Mammoth.EditorTools
             {
                 // Pulled well back from the lane, and kept low, so the valley stays
                 // open and the track ahead is never blocked from the follow camera.
-                BuildMountainRow(field, side, lane * 9f, step: 11f, heightMin: 6f, heightMax: 12f, baseMin: 5f, baseMax: 8f, ref seed);
-                BuildMountainRow(field, side, lane * 14f, step: 15f, heightMin: 11f, heightMax: 22f, baseMin: 7f, baseMax: 12f, ref seed);
+                // Taller-relative-to-base than before (narrower, sharper silhouette),
+                // matching the referenced low-poly mountain art's steep peaks rather
+                // than wide squat domes.
+                BuildMountainRow(field, side, lane * 9f, step: 11f, heightMin: 7f, heightMax: 14f, baseMin: 4f, baseMax: 6.5f, ref seed);
+                BuildMountainRow(field, side, lane * 14f, step: 15f, heightMin: 14f, heightMax: 28f, baseMin: 6f, baseMax: 9f, ref seed);
             }
         }
 
@@ -268,61 +273,72 @@ namespace Mammoth.EditorTools
             }
         }
 
-        /// <summary>Low-poly "pom-pom" trees scattered near the mountain bases
-        /// (trunk + 2-3 stacked round foliage balls, pastel tints), matching the
-        /// cozy low-poly forest look of the reference art.</summary>
+        /// <summary>Low-poly "lollipop" trees in small clusters near the mountain
+        /// bases: a short stem almost hidden under 1 (mostly) or 2 round foliage
+        /// balls, in saturated pastel tints — matching the squat candy-colored
+        /// trees clustered at the mountain's foot in the reference art, rather
+        /// than tall individually-spaced pine trees.</summary>
         static void BuildTrees(float lane)
         {
             var group = new GameObject("Trees");
             var rng = new System.Random(211);
-            for (int i = 0; i < 50; i++)
+            int clusterCount = 24;
+            for (int c = 0; c < clusterCount; c++)
             {
-                int side = i % 2 == 0 ? -1 : 1;
-                float x = side * (lane * (2.2f + (float)rng.NextDouble() * 2.5f));
-                float z = (float)rng.NextDouble() * 500f;
-                float scale = Mathf.Lerp(0.7f, 1.5f, (float)rng.NextDouble());
-
-                var tree = new GameObject("Tree");
-                tree.transform.SetParent(group.transform, false);
-                tree.transform.position = new Vector3(x, 0f, z);
-                tree.transform.rotation = Quaternion.Euler(0, (float)rng.NextDouble() * 360f, 0);
-                tree.transform.localScale = Vector3.one * scale;
-
-                var trunk = Part(tree, PrimitiveType.Cylinder, "Trunk",
-                    new Vector3(0, 0.35f, 0), new Vector3(0.12f, 0.35f, 0.12f), TreeTrunk);
-
-                int balls = rng.Next(2, 4);
-                float y = 0.62f;
-                Color foliage = TreeFoliage[rng.Next(TreeFoliage.Length)];
-                for (int b = 0; b < balls; b++)
+                int side = c % 2 == 0 ? -1 : 1;
+                float clusterX = side * (lane * (1.8f + (float)rng.NextDouble() * 1.8f));
+                float clusterZ = (float)rng.NextDouble() * 500f;
+                int count = rng.Next(3, 6);
+                for (int t = 0; t < count; t++)
                 {
-                    float ballScale = Mathf.Lerp(0.55f, 0.32f, b / (float)(balls - 1 == 0 ? 1 : balls - 1));
-                    var ball = new GameObject("Foliage");
-                    ball.transform.SetParent(tree.transform, false);
-                    ball.transform.localPosition = new Vector3(0, y, 0);
-                    ball.transform.localScale = Vector3.one * ballScale;
-                    var fmf = ball.AddComponent<MeshFilter>();
-                    var fmr = ball.AddComponent<MeshRenderer>();
-                    fmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 17 + b * 5 + 3, jitter: 0.12f, subdivisions: 1);
-                    fmr.sharedMaterial = MakeMaterial(foliage);
-                    y += ballScale * 0.85f;
+                    float x = clusterX + ((float)rng.NextDouble() - 0.5f) * 2.2f;
+                    float z = clusterZ + ((float)rng.NextDouble() - 0.5f) * 2.2f;
+                    float scale = Mathf.Lerp(0.55f, 1.05f, (float)rng.NextDouble());
+
+                    var tree = new GameObject("Tree");
+                    tree.transform.SetParent(group.transform, false);
+                    tree.transform.position = new Vector3(x, 0f, z);
+                    tree.transform.rotation = Quaternion.Euler(0, (float)rng.NextDouble() * 360f, 0);
+                    tree.transform.localScale = Vector3.one * scale;
+
+                    Part(tree, PrimitiveType.Cylinder, "Trunk",
+                        new Vector3(0, 0.14f, 0), new Vector3(0.09f, 0.14f, 0.09f), TreeTrunk);
+
+                    int balls = rng.NextDouble() < 0.3 ? 2 : 1;
+                    float y = 0.3f;
+                    Color foliage = TreeFoliage[rng.Next(TreeFoliage.Length)];
+                    for (int b = 0; b < balls; b++)
+                    {
+                        float ballScale = Mathf.Lerp(0.5f, 0.36f, balls <= 1 ? 0f : b / (float)(balls - 1));
+                        var ball = new GameObject("Foliage");
+                        ball.transform.SetParent(tree.transform, false);
+                        ball.transform.localPosition = new Vector3(0, y, 0);
+                        ball.transform.localScale = Vector3.one * ballScale;
+                        var fmf = ball.AddComponent<MeshFilter>();
+                        var fmr = ball.AddComponent<MeshRenderer>();
+                        fmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(c * 53 + t * 17 + b * 5 + 3, jitter: 0.1f, subdivisions: 1);
+                        fmr.sharedMaterial = MakeMaterial(foliage);
+                        y += ballScale * 0.8f;
+                    }
                 }
             }
         }
 
-        /// <summary>A few soft clouds drifting high over the track — clusters of
-        /// 2-3 overlapping flattened ice-chunk puffs in warm white.</summary>
+        /// <summary>A few soft, smooth-shaded clouds drifting near mountain
+        /// height (not high up in open sky) so they read as flanking/overlapping
+        /// the peaks like in the reference art. Deliberately smooth (not flat
+        /// low-poly faceted) to contrast with the angular mountains/icebergs.</summary>
         static void BuildClouds(float lane)
         {
             var group = new GameObject("Clouds");
             var rng = new System.Random(733);
-            for (int i = 0; i < 18; i++)
+            for (int i = 0; i < 16; i++)
             {
                 int side = i % 2 == 0 ? -1 : 1;
-                float x = side * (lane * (1.5f + (float)rng.NextDouble() * 5f));
-                float y = Mathf.Lerp(9f, 16f, (float)rng.NextDouble());
+                float x = side * (lane * (3f + (float)rng.NextDouble() * 4f));
+                float y = Mathf.Lerp(5f, 9f, (float)rng.NextDouble());
                 float z = (float)rng.NextDouble() * 520f;
-                float scale = Mathf.Lerp(1.6f, 3.2f, (float)rng.NextDouble());
+                float scale = Mathf.Lerp(1.8f, 3.4f, (float)rng.NextDouble());
 
                 var cloud = new GameObject("Cloud");
                 cloud.transform.SetParent(group.transform, false);
@@ -335,12 +351,12 @@ namespace Mammoth.EditorTools
                 {
                     var puff = new GameObject("Puff");
                     puff.transform.SetParent(cloud.transform, false);
-                    float px = (p - (puffs - 1) / 2f) * 0.6f;
-                    puff.transform.localPosition = new Vector3(px, (float)rng.NextDouble() * 0.15f, 0);
-                    puff.transform.localScale = new Vector3(0.75f, 0.45f, 0.65f) * Mathf.Lerp(0.8f, 1.1f, (float)rng.NextDouble());
+                    float px = (p - (puffs - 1) / 2f) * 0.55f;
+                    puff.transform.localPosition = new Vector3(px, (float)rng.NextDouble() * 0.12f, 0);
+                    puff.transform.localScale = new Vector3(0.8f, 0.55f, 0.75f) * Mathf.Lerp(0.85f, 1.15f, (float)rng.NextDouble());
                     var pmf = puff.AddComponent<MeshFilter>();
                     var pmr = puff.AddComponent<MeshRenderer>();
-                    pmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 41 + p * 7 + 1, jitter: 0.14f, subdivisions: 1);
+                    pmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 41 + p * 7 + 1, jitter: 0.08f, subdivisions: 2, flatShaded: false);
                     pmr.sharedMaterial = MakeMaterial(CloudWhite);
                 }
             }

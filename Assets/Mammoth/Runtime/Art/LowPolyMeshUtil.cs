@@ -58,7 +58,7 @@ namespace Mammoth.Art
         /// Builds a jittered low-poly "ice chunk" mesh by subdividing an octahedron
         /// and displacing vertices along their normal, then flat-shading the result.
         /// </summary>
-        public static Mesh BuildIceChunk(int seed, float jitter = 0.28f, int subdivisions = 1)
+        public static Mesh BuildIceChunk(int seed, float jitter = 0.28f, int subdivisions = 1, bool flatShaded = true)
         {
             var rng = new System.Random(seed);
             var verts = new System.Collections.Generic.List<Vector3>
@@ -108,7 +108,10 @@ namespace Mammoth.Art
             mesh.triangles = tris.ToArray();
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
-            return Flatten(mesh);
+            // flatShaded=false keeps smooth per-vertex normals — used for soft,
+            // puffy shapes like clouds that should contrast with the deliberately
+            // faceted low-poly look used everywhere else (icebergs, mountains).
+            return flatShaded ? Flatten(mesh) : mesh;
         }
 
         /// <summary>
@@ -193,15 +196,17 @@ namespace Mammoth.Art
 
         /// <summary>
         /// Builds a jagged low-poly "mountain ridge": a cluster of 2-3 angular
-        /// pyramidal peaks sharing one base ring, each peak split at a snow-line
-        /// into a lower rock frustum (submesh 0) and an upper snow-tip cone
-        /// (submesh 1). Deliberately built from a handful of large, flat planes
-        /// with only mild per-vertex noise on the base ring — not heavy per-vertex
-        /// jitter — so the silhouette reads as clean folded-paper facets (like
-        /// stylized low-poly mountain illustrations) rather than a crumpled blob.
-        /// Assign a rock-tone material to submesh 0 and a snow-tone material to
-        /// submesh 1 on the MeshRenderer to get the two-tone look with perfect
-        /// alignment (no separate floating snow-cap prop needed).
+        /// pyramidal peaks sharing one base ring, each peak (except the rare bare
+        /// rock spike) split into a lower rock frustum (submesh 0) and an upper
+        /// snow-tip cone (submesh 1) along a snow-line whose height is jittered
+        /// per edge, so the rock/snow boundary reads as an irregular jagged crown
+        /// instead of a clean horizontal ring — matching reference low-poly
+        /// mountain art where the snow line looks hand-cut rather than lathed.
+        /// One peak in the cluster is occasionally stretched noticeably taller
+        /// than the rest for a lone sharp spike accent. Assign a rock-tone
+        /// material to submesh 0 and a snow-tone material to submesh 1 on the
+        /// MeshRenderer — the snow tip is always perfectly aligned to the peak,
+        /// no separate floating snow-cap prop needed.
         /// </summary>
         public static Mesh BuildMountainRidge(int seed, int peaks = 2, float baseJitter = 0.08f, float snowLine = 0.55f)
         {
@@ -216,13 +221,20 @@ namespace Mammoth.Art
                 baseVerts[i] = new Vector3(Mathf.Cos(angle) * r, 0f, Mathf.Sin(angle) * r);
             }
 
+            int spikePeak = rng.NextDouble() < 0.4 ? rng.Next(peaks) : -1;
             var apexPos = new Vector3[peaks];
+            var hasSnow = new bool[peaks];
             for (int p = 0; p < peaks; p++)
             {
                 float midAngle = ((p * 3 + 1) / (float)sides) * Mathf.PI * 2f;
-                float height = Mathf.Lerp(0.72f, 1f, (float)rng.NextDouble());
-                float lean = Mathf.Lerp(0f, 0.22f, (float)rng.NextDouble());
+                float height = Mathf.Lerp(0.75f, 1.05f, (float)rng.NextDouble());
+                if (p == spikePeak) height *= 1.3f; // one tall, narrow accent spike
+                float lean = Mathf.Lerp(0f, 0.18f, (float)rng.NextDouble());
                 apexPos[p] = new Vector3(Mathf.Cos(midAngle) * lean, height, Mathf.Sin(midAngle) * lean);
+                // A bare solid-rock spike (no snow) for variety, like a sheltered
+                // crag too steep to hold snow — skipped for very short peaks so
+                // every mountain still shows at least some snow overall.
+                hasSnow[p] = !(p == spikePeak && rng.NextDouble() < 0.6);
             }
 
             var rockTris = new System.Collections.Generic.List<Vector3>();
@@ -237,7 +249,12 @@ namespace Mammoth.Art
                 for (int k = 0; k < 4; k++)
                 {
                     v[k] = baseVerts[(p * 3 + k) % sides];
-                    s[k] = Vector3.Lerp(v[k], apex, snowLine);
+                    // Jagged snow-line: each edge gets its own height fraction
+                    // instead of one uniform ring, so the boundary zig-zags.
+                    float frac = hasSnow[p]
+                        ? Mathf.Clamp01(snowLine + ((float)rng.NextDouble() * 2f - 1f) * 0.22f)
+                        : 1f;
+                    s[k] = Vector3.Lerp(v[k], apex, frac);
                 }
 
                 // Base cap (downward normal) — hidden at ground level, rock-colored.
@@ -247,11 +264,20 @@ namespace Mammoth.Art
 
                 for (int k = 0; k < 3; k++)
                 {
-                    // Rock frustum quad (base ring -> snow-line ring).
-                    rockTris.Add(v[k]); rockTris.Add(s[k]); rockTris.Add(s[k + 1]);
-                    rockTris.Add(v[k]); rockTris.Add(s[k + 1]); rockTris.Add(v[k + 1]);
-                    // Snow cone (snow-line ring -> apex).
-                    snowTris.Add(s[k]); snowTris.Add(apex); snowTris.Add(s[k + 1]);
+                    if (hasSnow[p])
+                    {
+                        // Rock frustum quad (base ring -> snow-line ring).
+                        rockTris.Add(v[k]); rockTris.Add(s[k]); rockTris.Add(s[k + 1]);
+                        rockTris.Add(v[k]); rockTris.Add(s[k + 1]); rockTris.Add(v[k + 1]);
+                        // Snow cone (snow-line ring -> apex).
+                        snowTris.Add(s[k]); snowTris.Add(apex); snowTris.Add(s[k + 1]);
+                    }
+                    else
+                    {
+                        // No snow on this peak: a single rock cone straight to
+                        // the apex (not a frustum+degenerate-cap pair).
+                        rockTris.Add(v[k]); rockTris.Add(apex); rockTris.Add(v[k + 1]);
+                    }
                 }
             }
 
