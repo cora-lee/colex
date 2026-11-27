@@ -314,47 +314,93 @@ namespace Mammoth.EditorTools
         /// <summary>Icebergs on the snowy part, lilac rocks once it turns to
         /// grass, always fully off the road (inner edge at x ≥ 5) and inside a
         /// band that ends before the tree band starts.</summary>
-        /// <summary>Icebergs lining both sides of the road like before, as a
-        /// continuous frozen corridor, but always fully off the road (inner edge
-        /// at x >= 4.5) so they never hide or block acorns. Downhill they get
-        /// smaller and fewer: the ice is retreating. A few blush-pink crystals
-        /// are mixed in for the cozy palette.</summary>
+        static readonly List<Vector3> placedIcebergs = new List<Vector3>();   // x, z, radius
+        static readonly List<Vector3> placedMountains = new List<Vector3>();  // x, z, base radius
+
+        /// <summary>Acorn line x at distance z (piecewise linear between acorns).</summary>
+        static float PathX(float z)
+        {
+            if (z <= AcornPath[0].z) return 0f;
+            for (int i = 1; i < AcornPath.Length; i++)
+                if (z <= AcornPath[i].z)
+                {
+                    var a = AcornPath[i - 1]; var b = AcornPath[i];
+                    return Mathf.Lerp(a.x, b.x, (z - a.z) / (b.z - a.z));
+                }
+            return 0f;
+        }
+
+        /// <summary>True when an iceberg at (x, z) with footprint r leaves the acorn
+        /// line clear around it and a little before it (so it can't block the
+        /// view of an acorn from the follow camera either).</summary>
+        static bool KeepsPathClear(float x, float z, float r)
+        {
+            for (float zz = z - r - 9f; zz <= z + r; zz += 1f)
+                if (Mathf.Abs(x - PathX(zz)) - r < 1.5f) return false;
+            return true;
+        }
+
+        /// <summary>Icebergs like the original: mixed sizes, scattered on both
+        /// sides and cutting into the road as obstacles to steer around. The
+        /// acorn line always keeps a clear lane, so acorns are never hidden or
+        /// boxed in. None on the summit (doc: no penalty obstacles there).</summary>
         static void BuildIcebergsAndRocks()
         {
             var group = new GameObject("Icebergs");
+            placedIcebergs.Clear();
             var rng = new System.Random(11);
-            int i = 0;
-            foreach (int side in new[] { -1, 1 })
+            int made = 0;
+            for (int i = 0; i < 120 && made < 34; i++)
             {
-                for (float z = -24f + side * 3f; z < MammothRoute.CampStartZ - 4f; z += Mathf.Lerp(6f, 10f, (float)rng.NextDouble()))
+                int side = i % 2 == 0 ? -1 : 1;
+                float z = Mathf.Lerp(-12f, MammothRoute.CampStartZ - 8f, (float)rng.NextDouble());
+                if (z > MammothRoute.SummitStartZ - 6f && z < MammothRoute.SummitEndZ + 6f) continue;
+                float scale = Mathf.Lerp(1.4f, 4.2f, (float)rng.NextDouble());
+                if (z > SnowEndZ) scale *= 0.8f; // retreating ice downhill
+                float x = side * (3.8f + (float)rng.NextDouble() * 3.2f);
+                float r = scale * 0.85f;
+                // Nudge outward until the acorn line is clear, or skip it.
+                bool ok = false;
+                for (int k = 0; k < 8 && !ok; k++)
                 {
-                    bool melting = z > SnowEndZ;
-                    if (melting && rng.NextDouble() < 0.4) continue;
-                    float scale = melting ? Mathf.Lerp(0.8f, 1.6f, (float)rng.NextDouble()) : Mathf.Lerp(1.2f, 2.6f, (float)rng.NextDouble());
-                    float x = side * (4.6f + scale * 0.9f + (float)rng.NextDouble() * 0.8f);
-                    var go = new GameObject("Iceberg");
-                    go.transform.SetParent(group.transform);
-                    go.transform.position = new Vector3(x, GroundY(x, z) + scale * 0.35f - 0.4f, z);
-                    go.transform.rotation = Quaternion.Euler(0, (float)rng.NextDouble() * 360f, 0);
-                    go.transform.localScale = Vector3.one * scale;
-                    go.AddComponent<MeshFilter>().sharedMesh = LowPolyMeshUtil.BuildIceChunk(i++ * 97 + 5, jitter: 0.32f, subdivisions: 1);
-                    go.AddComponent<MeshRenderer>().sharedMaterial = MakeMaterial(Color.Lerp(Ice3, SnowWhite, (float)rng.NextDouble() * 0.6f));
+                    if (KeepsPathClear(x, z, r)) ok = true;
+                    else x += side * 0.5f;
                 }
+                if (!ok) continue;
+                bool crowded = false;
+                foreach (var p in placedIcebergs)
+                    if (new Vector2(p.x - x, p.y - z).magnitude < (p.z + r) * 0.8f) { crowded = true; break; }
+                if (crowded) continue;
+
+                var go = new GameObject("Iceberg");
+                go.transform.SetParent(group.transform);
+                go.transform.position = new Vector3(x, GroundY(x, z) + scale * 0.35f - 0.4f, z);
+                go.transform.rotation = Quaternion.Euler(0, (float)rng.NextDouble() * 360f, 0);
+                go.transform.localScale = Vector3.one * scale;
+                go.AddComponent<MeshFilter>().sharedMesh = LowPolyMeshUtil.BuildIceChunk(made * 97 + 5, jitter: 0.32f, subdivisions: 1);
+                go.AddComponent<MeshRenderer>().sharedMaterial = MakeMaterial(Color.Lerp(Ice3, SnowWhite, (float)rng.NextDouble() * 0.6f));
+                // Only icebergs that actually reach the road count as obstacles.
+                if (Mathf.Abs(x) - r < MammothRoute.RoadHalfWidth) go.AddComponent<MammothObstacle>().radius = r;
+                placedIcebergs.Add(new Vector3(x, z, r));
+                made++;
             }
+
             var pink = new Color(0.98f, 0.82f, 0.86f);
-            for (int k = 0; k < 10; k++)
+            for (int k = 0; k < 8; k++)
             {
                 int side = k % 2 == 0 ? -1 : 1;
-                float z = 30f + (float)rng.NextDouble() * 440f;
-                float sc = Mathf.Lerp(0.5f, 1.0f, (float)rng.NextDouble());
-                float x = side * (5f + sc + (float)rng.NextDouble() * 1.5f);
+                float z = 40f + (float)rng.NextDouble() * 440f;
+                float x = side * (4.8f + (float)rng.NextDouble() * 2f);
+                float sc = Mathf.Lerp(0.5f, 1.1f, (float)rng.NextDouble());
+                if (!KeepsPathClear(x, z, sc)) continue;
                 var go = new GameObject("Accent Crystal");
                 go.transform.SetParent(group.transform);
-                go.transform.position = new Vector3(x, GroundY(x, z) + 0.5f, z);
+                go.transform.position = new Vector3(x, GroundY(x, z) + 0.6f, z);
                 go.transform.rotation = Quaternion.Euler(0, (float)rng.NextDouble() * 360f, 0);
                 go.transform.localScale = Vector3.one * sc;
                 go.AddComponent<MeshFilter>().sharedMesh = LowPolyMeshUtil.BuildIceChunk(k * 53 + 2, jitter: 0.22f, subdivisions: 0);
                 go.AddComponent<MeshRenderer>().sharedMaterial = MakeMaterial(pink);
+                placedIcebergs.Add(new Vector3(x, z, sc));
             }
         }
 
@@ -364,10 +410,11 @@ namespace Mammoth.EditorTools
         {
             var field = new GameObject("Mountains");
             int seed = 0;
+            placedMountains.Clear();
             foreach (int side in new[] { -1, 1 })
             {
-                BuildMountainRow(field, side, 21f, 1.5f, step: 11f, heightMin: 8f, heightMax: 13f, baseMin: 4.5f, baseMax: 6.5f, ref seed);
-                BuildMountainRow(field, side, 31f, 2f, step: 15f, heightMin: 13f, heightMax: 19f, baseMin: 7f, baseMax: 10f, ref seed);
+                BuildMountainRow(field, side, 18f, 6f, step: 11f, heightMin: 8f, heightMax: 13f, baseMin: 4.5f, baseMax: 6.5f, ref seed);
+                BuildMountainRow(field, side, 28f, 8f, step: 15f, heightMin: 13f, heightMax: 19f, baseMin: 7f, baseMax: 10f, ref seed);
             }
         }
 
@@ -381,12 +428,16 @@ namespace Mammoth.EditorTools
                 float zPos = z + ((float)rng.NextDouble() - 0.5f) * step * 0.5f;
                 float heightScale = Mathf.Lerp(heightMin, heightMax, (float)rng.NextDouble());
                 float baseScale = Mathf.Lerp(baseMin, baseMax, (float)rng.NextDouble());
+                // Keep the campsite (tents, fire) clear of mountain bases.
+                if (zPos > 495f && zPos < 545f && Mathf.Abs(x) - baseScale < 11.5f)
+                    x = side * (11.5f + baseScale);
 
                 var go = new GameObject("Mountain");
                 go.transform.SetParent(field.transform);
                 go.transform.position = new Vector3(x, GroundY(x, zPos) - 1.2f, zPos);
                 go.transform.rotation = Quaternion.Euler(0, (float)rng.NextDouble() * 360f, 0);
                 go.transform.localScale = new Vector3(baseScale, heightScale, baseScale);
+                placedMountains.Add(new Vector3(x, zPos, baseScale));
 
                 int peaks = rng.NextDouble() < 0.12 ? 3 : 2;
                 go.AddComponent<MeshFilter>().sharedMesh = LowPolyMeshUtil.BuildMountainRidge(seed * 71 + 13, peaks: peaks, baseJitter: 0.05f, snowLine: 0.55f);
@@ -414,7 +465,7 @@ namespace Mammoth.EditorTools
                     bool spring = z > SnowEndZ - 20f;
                     // Clusters of varied heights, a little denser on the green downhill.
                     int count = rng.Next(1, spring ? 4 : 3);
-                    float cx = side * Mathf.Lerp(11.6f, 12.4f, (float)rng.NextDouble());
+                    float cx = side * Mathf.Lerp(8.5f, 11.5f, (float)rng.NextDouble());
                     for (int t = 0; t < count; t++)
                     {
                         for (int attempt = 0; attempt < 8; attempt++)
@@ -422,7 +473,8 @@ namespace Mammoth.EditorTools
                             float x = cx + ((float)rng.NextDouble() - 0.5f) * 1.2f;
                             float zz = z + ((float)rng.NextDouble() - 0.5f) * 5.2f;
                             float ax = Mathf.Abs(x);
-                            if (ax < 11.2f || ax > 12.8f) continue;
+                            if (ax < 7.5f || ax > 12.5f) continue;
+                            if (!ClearOfScenery(x, zz)) continue;
                             if (zz > MammothRoute.SummitStartZ && zz < MammothRoute.SummitEndZ && rng.NextDouble() < 0.6) break;
                             if (!FarFromTrees(x, zz, 1.7f)) continue;
                             var palette = (zz > SnowEndZ - 20f + ((float)rng.NextDouble() - 0.5f) * 40f) ? SpringTrees : FrostTrees;
@@ -435,6 +487,15 @@ namespace Mammoth.EditorTools
                     z += Mathf.Lerp(22f, 34f, (float)rng.NextDouble());
                 }
             }
+        }
+
+        static bool ClearOfScenery(float x, float z)
+        {
+            foreach (var p in placedIcebergs)
+                if (new Vector2(p.x - x, p.y - z).magnitude < p.z + 0.9f) return false;
+            foreach (var m in placedMountains)
+                if (new Vector2(m.x - x, m.y - z).magnitude < m.z * 1.05f + 0.6f) return false;
+            return true;
         }
 
         static bool FarFromTrees(float x, float z, float minDist)
@@ -620,7 +681,7 @@ namespace Mammoth.EditorTools
                 int side = i % 2 == 0 ? -1 : 1;
                 float x = side * Mathf.Lerp(10.5f, 12.5f, (float)rng.NextDouble());
                 float z = Mathf.Lerp(506f, 560f, (float)rng.NextDouble());
-                if (!FarFromTrees(x, z, 1.8f)) continue;
+                if (!FarFromTrees(x, z, 1.8f) || !ClearOfScenery(x, z)) continue;
                 BuildTree(group.transform, new Vector3(x, GroundY(x, z) - 0.15f, z), Mathf.Lerp(1f, 1.5f, (float)rng.NextDouble()), SpringTrees[rng.Next(SpringTrees.Length)], rng);
                 placedTrees.Add(new Vector2(x, z));
             }

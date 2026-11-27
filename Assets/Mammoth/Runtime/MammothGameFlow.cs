@@ -89,6 +89,7 @@ namespace Mammoth
             {
                 controller.OnCollected += HandleCollected;
                 controller.OnEmptyGrab += HandleEmptyGrab;
+                controller.OnCollision += HandleCollision;
             }
             EnterHome();
         }
@@ -98,6 +99,12 @@ namespace Mammoth
             if (controller == null) return;
             controller.OnCollected -= HandleCollected;
             controller.OnEmptyGrab -= HandleEmptyGrab;
+            controller.OnCollision -= HandleCollision;
+        }
+
+        void HandleCollision()
+        {
+            if (State == MammothFlowState.Playing) AddToast("Bump!  -" + controller.collisionPenalty, Warn, 1.3f);
         }
 
         // =====================================================================
@@ -559,7 +566,7 @@ namespace Mammoth
 
             string rules =
                 "•  The route moves forward on its own.\n" +
-                "•  Steer around rocks and toward acorns.\n" +
+                "•  Steer around icebergs (a bump costs 5 points) and toward acorns.\n" +
                 "•  Clap when an acorn swells near the trunk to collect it.\n" +
                 "•  High acorns need a jump first, then a clap in the air.\n" +
                 "•  <b>Speed up uphill; watch your speed downhill.</b>";

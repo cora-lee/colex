@@ -87,6 +87,17 @@ namespace Mammoth
         public event Action<MammothReward> OnCollected;
         public event Action OnEmptyGrab;
         public event Action OnJumped;
+        public event Action OnCollision;
+
+        [Header("Collisions (doc proposal)")]
+        public int collisionPenalty = 5;
+        public float collisionSlowFactor = 0.5f;
+        public float collisionSlowSeconds = 0.8f;
+        public float collisionProtectSeconds = 1f;
+        [Tooltip("Mammoth body radius used against obstacle footprints.")]
+        public float bodyRadius = 0.55f;
+        double slowUntil = -1;
+        double protectUntil = -1;
 
         MammothSettings cfg;
         MammothMotion motion = new MammothMotion();
@@ -139,6 +150,8 @@ namespace Mammoth
             collectedIds.Clear();
             motion = new MammothMotion();
             grabOpen = false;
+            slowUntil = -1; protectUntil = -1;
+            foreach (var o in MammothObstacle.Active) o.hitThisPass = false;
             keySpeed = cfg.min_speed;
             SetTrunkRaised(false);
             foreach (var r in FindObjectsByType<MammothReward>(FindObjectsInactive.Include, FindObjectsSortMode.None))
@@ -167,9 +180,11 @@ namespace Mammoth
             lateral = Mathf.Clamp(lateral + lateralVel * dt * worldScale, -MammothRoute.SteerLimit, MammothRoute.SteerLimit);
 
             float mult = MammothRoute.SpeedMultiplier(distance);
+            if (clock < slowUntil) mult *= collisionSlowFactor;
             ActualSpeed = (moveForward && !holdPosition) ? speedIn * mult : 0f;
             distance += ActualSpeed * worldScale * dt;
 
+            if (moveForward && !holdPosition && clockRunning) CheckCollisions();
             UpdateReach();
             UpdateGrabWindow();
             ApplyPose(dt);
@@ -253,6 +268,26 @@ namespace Mammoth
             else best.Collect();
             OnCollected?.Invoke(best);
             return true;
+        }
+
+        void CheckCollisions()
+        {
+            foreach (var o in MammothObstacle.Active)
+            {
+                float dx = o.transform.position.x - lateral;
+                float dz = o.transform.position.z - distance;
+                bool touching = dx * dx + dz * dz < (o.radius + bodyRadius) * (o.radius + bodyRadius);
+                if (!touching) { if (dz < -o.radius - 2f) o.hitThisPass = false; continue; }
+                // Continuous contact never deducts again; pass through it.
+                if (o.hitThisPass || clock < protectUntil) continue;
+                o.hitThisPass = true;
+                protectUntil = clock + collisionProtectSeconds;
+                slowUntil = clock + collisionSlowSeconds;
+                Collisions++;
+                Score = Mathf.Max(0, Score - collisionPenalty);
+                Wobble(0.7f);
+                OnCollision?.Invoke();
+            }
         }
 
         Vector3 GrabFrom => (grabOrigin != null ? grabOrigin : transform).position;
