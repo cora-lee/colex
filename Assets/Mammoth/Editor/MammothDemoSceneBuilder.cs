@@ -373,7 +373,7 @@ namespace Mammoth.EditorTools
             for (int i = 0; i < 600 && made < 46; i++)
             {
                 int side = i % 2 == 0 ? -1 : 1;
-                float z = Mathf.Lerp(-12f, MammothRoute.CampStartZ - 8f, (float)rng.NextDouble());
+                float z = Mathf.Lerp(14f, MammothRoute.CampStartZ - 8f, (float)rng.NextDouble()); // start area stays open for the home view
                 if (z > MammothRoute.SummitStartZ - 6f && z < MammothRoute.SummitEndZ + 6f) continue;
                 float scale = Mathf.Lerp(1.4f, 4.2f, (float)rng.NextDouble());
                 if (z > SnowEndZ) scale *= 0.85f; // retreating ice downhill

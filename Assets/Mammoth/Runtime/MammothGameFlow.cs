@@ -129,7 +129,7 @@ namespace Mammoth
         void EnterHome()
         {
             State = MammothFlowState.Home;
-            StopCamera();
+            if (!keyboardMode) StartCamera();
             DestroyPracticeAcorn();
             if (controller != null) controller.ResetRun();
             SetControl(false, false, false);
@@ -517,20 +517,57 @@ namespace Mammoth
                 case MammothFlowState.Ending: DrawEnding(); break;
                 case MammothFlowState.Results: DrawResults(); break;
             }
+            if (State != MammothFlowState.Setup && !keyboardMode) DrawCameraPreview();
             DrawToasts();
             GUI.matrix = Matrix4x4.identity;
         }
 
         float CenterX(float w) => (view.x - w) * 0.5f;
 
+        /// <summary>Small mirrored live camera preview in the bottom-left corner,
+        /// with the three player regions and whether each role is tracked.</summary>
+        void DrawCameraPreview()
+        {
+            const float w = 212f, h = 159f;
+            var box = new Rect(20f, view.y - h - 20f, w, h);
+            Panel(box, new Color(0.2f, 0.18f, 0.25f, 0.92f));
+            var inner = new Rect(box.x + 6f, box.y + 6f, w - 12f, h - 12f);
+            bool camReady = poseEngine != null && poseEngine.CameraReady && poseEngine.CameraTexture != null;
+            if (!camReady)
+            {
+                string st = poseEngine != null ? poseEngine.Status : "camera off";
+                if (st.Contains("denied")) st = "Camera permission is off for Unity.";
+                Label(inner, st, centerStyle.WithSize(14), new Color(1f, 1f, 1f, 0.85f));
+                return;
+            }
+            bool vflip = poseEngine.CameraVerticallyMirrored;
+            GUI.DrawTextureWithTexCoords(inner, poseEngine.CameraTexture, vflip ? new Rect(1f, 1f, -1f, -1f) : new Rect(1f, 0f, -1f, 1f));
+            var s = receiver != null ? receiver.State : null;
+            string[] tag = { "Speed", "Direction", "Jump" };
+            float zw = inner.width / 3f;
+            var old = GUI.color;
+            for (int i = 0; i < 3; i++)
+            {
+                bool ok = s != null && s.visible != null && s.visible.Length > i && s.visible[i];
+                var zr = new Rect(inner.x + i * zw, inner.y, zw, inner.height);
+                GUI.color = new Color(1f, 1f, 1f, 0.6f);
+                if (i > 0) GUI.DrawTexture(new Rect(zr.x - 1f, zr.y, 2f, zr.height), whiteTex);
+                GUI.color = ok ? new Color(0.45f, 0.9f, 0.6f, 0.9f) : new Color(1f, 0.55f, 0.55f, 0.8f);
+                GUI.DrawTexture(new Rect(zr.x + 2f, zr.yMax - 22f, zr.width - 4f, 20f), roundTex);
+                GUI.color = old;
+                Label(new Rect(zr.x, zr.yMax - 22f, zr.width, 20f), tag[i], centerStyle.WithSize(12).Bold(), Ink);
+            }
+            GUI.color = old;
+        }
+
         // ---------------- Home ----------------
         void DrawHome()
         {
             float w = 470f;
-            var card = new Rect(48f, 90f, w, 470f);
+            var card = new Rect(48f, 56f, w, 470f);
             Panel(card, Cream);
             Label(new Rect(card.x + 20f, card.y + 34f, w - 40f, 120f), "The Last Bag\nof Acorns", titleStyle, Acorn);
-            Label(new Rect(card.x + 30f, card.y + 160f, w - 60f, 60f), "Three players. One elephant. Over the mountain together.", centerStyle, InkSoft);
+            Label(new Rect(card.x + 30f, card.y + 160f, w - 60f, 60f), "Over the mountain together.", centerStyle, InkSoft);
             float bx = card.x + 50f, bw = w - 100f;
             if (Button(new Rect(bx, card.y + 240f, bw, 58f), "Start team adventure", Acorn)) EnterRules(true);
             if (Button(new Rect(bx, card.y + 312f, bw, 52f), "Practice controls", Mint)) State = MammothFlowState.PracticeSelect;

@@ -62,12 +62,31 @@ namespace Mammoth
             }
         }
 
+        /// <summary>Icebergs cut into the road, so the camera can drift into one.
+        /// Lift it over the iceberg instead of rendering from inside it.</summary>
+        void KeepOutOfIcebergs()
+        {
+            Vector3 p = transform.position;
+            foreach (var o in MammothObstacle.Active)
+            {
+                Vector3 c = o.transform.position;
+                float R = o.transform.lossyScale.x * 1.3f + 0.5f;
+                float dx = p.x - c.x, dz = p.z - c.z;
+                float flat2 = dx * dx + dz * dz;
+                if (flat2 >= R * R) continue;
+                float top = c.y + Mathf.Sqrt(R * R - flat2);
+                if (p.y < top) p.y = top;
+            }
+            transform.position = p;
+        }
+
         void LateUpdate()
         {
             if (target == null) return;
             Compute(out var goal, out var look);
             float k = 1f - Mathf.Exp(-smoothing * Time.deltaTime);
             transform.position = Vector3.Lerp(transform.position, goal, k);
+            KeepOutOfIcebergs();
             var want = Quaternion.LookRotation(look - transform.position);
             transform.rotation = Quaternion.Slerp(transform.rotation, want, k);
         }
