@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using Unity.InferenceEngine;
@@ -71,7 +72,6 @@ namespace Mammoth
 
         void OnEnable()
         {
-            StartCamera();
             if (modelAsset != null)
             {
                 runtimeModel = ModelLoader.Load(modelAsset);
@@ -82,6 +82,14 @@ namespace Mammoth
                 Status = "no model assigned";
                 Debug.LogError("[Mammoth] MammothPoseEngine has no modelAsset assigned.");
             }
+
+            // Just calling WebCamTexture.Play() does not reliably trigger macOS's
+            // camera permission dialog for the Unity Editor process — it can sit
+            // forever in "waiting for camera permission" with no system prompt
+            // ever appearing. Application.RequestUserAuthorization is the
+            // documented, reliable way to actually raise that prompt (or confirm
+            // the app already has/lacks permission) before we touch the camera.
+            StartCoroutine(RequestPermissionThenStartCamera());
         }
 
         void OnDisable()
@@ -91,6 +99,21 @@ namespace Mammoth
             worker = null;
             inputTensor?.Dispose();
             inputTensor = null;
+        }
+
+        IEnumerator RequestPermissionThenStartCamera()
+        {
+            Status = "requesting camera permission...";
+            yield return Application.RequestUserAuthorization(UserAuthorization.WebCam);
+
+            if (!Application.HasUserAuthorization(UserAuthorization.WebCam))
+            {
+                Status = "camera permission denied - check System Settings > Privacy & Security > Camera, allow Unity, then press Play again";
+                Debug.LogError("[Mammoth] " + Status);
+                yield break;
+            }
+
+            StartCamera();
         }
 
         void StartCamera()
@@ -105,7 +128,7 @@ namespace Mammoth
             int idx = (cameraDeviceIndex >= 0 && cameraDeviceIndex < devices.Length) ? cameraDeviceIndex : 0;
             webCam = new WebCamTexture(devices[idx].name, 960, 720, 30);
             webCam.Play();
-            Status = "waiting for camera permission...";
+            Status = "starting camera feed...";
         }
 
         /// <summary>
