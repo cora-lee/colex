@@ -273,54 +273,62 @@ namespace Mammoth.EditorTools
             }
         }
 
-        /// <summary>Low-poly "lollipop" trees in small clusters near the mountain
-        /// bases: a short stem almost hidden under 1 (mostly) or 2 round foliage
-        /// balls, in saturated pastel tints — matching the squat candy-colored
-        /// trees clustered at the mountain's foot in the reference art, rather
-        /// than tall individually-spaced pine trees.</summary>
+        /// <summary>Low-poly "lollipop" trees in small clusters planted along
+        /// both sides of the track at regular intervals (not randomly scattered,
+        /// so there are no empty gaps or clumping down the lane): a short stem
+        /// almost hidden under 1 (mostly) or 2 round foliage balls, in saturated
+        /// pastel tints — matching the squat candy-colored trees clustered at
+        /// the mountain's foot in the reference art, rather than tall
+        /// individually-spaced pine trees.</summary>
         static void BuildTrees(float lane)
         {
             var group = new GameObject("Trees");
             var rng = new System.Random(211);
-            int clusterCount = 24;
-            for (int c = 0; c < clusterCount; c++)
+            const float step = 22f;
+            float z = 8f;
+            int seedBase = 0;
+            while (z < 500f)
             {
-                int side = c % 2 == 0 ? -1 : 1;
-                float clusterX = side * (lane * (1.8f + (float)rng.NextDouble() * 1.8f));
-                float clusterZ = (float)rng.NextDouble() * 500f;
-                int count = rng.Next(3, 6);
-                for (int t = 0; t < count; t++)
+                foreach (int side in new[] { -1, 1 })
                 {
-                    float x = clusterX + ((float)rng.NextDouble() - 0.5f) * 2.2f;
-                    float z = clusterZ + ((float)rng.NextDouble() - 0.5f) * 2.2f;
-                    float scale = Mathf.Lerp(0.55f, 1.05f, (float)rng.NextDouble());
-
-                    var tree = new GameObject("Tree");
-                    tree.transform.SetParent(group.transform, false);
-                    tree.transform.position = new Vector3(x, 0f, z);
-                    tree.transform.rotation = Quaternion.Euler(0, (float)rng.NextDouble() * 360f, 0);
-                    tree.transform.localScale = Vector3.one * scale;
-
-                    Part(tree, PrimitiveType.Cylinder, "Trunk",
-                        new Vector3(0, 0.14f, 0), new Vector3(0.09f, 0.14f, 0.09f), TreeTrunk);
-
-                    int balls = rng.NextDouble() < 0.3 ? 2 : 1;
-                    float y = 0.3f;
-                    Color foliage = TreeFoliage[rng.Next(TreeFoliage.Length)];
-                    for (int b = 0; b < balls; b++)
+                    float clusterX = side * (lane * (1.7f + (float)rng.NextDouble() * 1.4f));
+                    float clusterZ = z + ((float)rng.NextDouble() - 0.5f) * step * 0.4f;
+                    int count = rng.Next(3, 6);
+                    for (int t = 0; t < count; t++)
                     {
-                        float ballScale = Mathf.Lerp(0.5f, 0.36f, balls <= 1 ? 0f : b / (float)(balls - 1));
-                        var ball = new GameObject("Foliage");
-                        ball.transform.SetParent(tree.transform, false);
-                        ball.transform.localPosition = new Vector3(0, y, 0);
-                        ball.transform.localScale = Vector3.one * ballScale;
-                        var fmf = ball.AddComponent<MeshFilter>();
-                        var fmr = ball.AddComponent<MeshRenderer>();
-                        fmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(c * 53 + t * 17 + b * 5 + 3, jitter: 0.1f, subdivisions: 1);
-                        fmr.sharedMaterial = MakeMaterial(foliage);
-                        y += ballScale * 0.8f;
+                        float x = clusterX + ((float)rng.NextDouble() - 0.5f) * 2.2f;
+                        float zPos = clusterZ + ((float)rng.NextDouble() - 0.5f) * 2.2f;
+                        float scale = Mathf.Lerp(0.55f, 1.05f, (float)rng.NextDouble());
+                        int seed = seedBase++;
+
+                        var tree = new GameObject("Tree");
+                        tree.transform.SetParent(group.transform, false);
+                        tree.transform.position = new Vector3(x, 0f, zPos);
+                        tree.transform.rotation = Quaternion.Euler(0, (float)rng.NextDouble() * 360f, 0);
+                        tree.transform.localScale = Vector3.one * scale;
+
+                        Part(tree, PrimitiveType.Cylinder, "Trunk",
+                            new Vector3(0, 0.14f, 0), new Vector3(0.09f, 0.14f, 0.09f), TreeTrunk);
+
+                        int balls = rng.NextDouble() < 0.3 ? 2 : 1;
+                        float y = 0.3f;
+                        Color foliage = TreeFoliage[rng.Next(TreeFoliage.Length)];
+                        for (int b = 0; b < balls; b++)
+                        {
+                            float ballScale = Mathf.Lerp(0.5f, 0.36f, balls <= 1 ? 0f : b / (float)(balls - 1));
+                            var ball = new GameObject("Foliage");
+                            ball.transform.SetParent(tree.transform, false);
+                            ball.transform.localPosition = new Vector3(0, y, 0);
+                            ball.transform.localScale = Vector3.one * ballScale;
+                            var fmf = ball.AddComponent<MeshFilter>();
+                            var fmr = ball.AddComponent<MeshRenderer>();
+                            fmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(seed * 7 + b * 5 + 3, jitter: 0.1f, subdivisions: 1);
+                            fmr.sharedMaterial = MakeMaterial(foliage);
+                            y += ballScale * 0.8f;
+                        }
                     }
                 }
+                z += step;
             }
         }
 
@@ -467,21 +475,30 @@ namespace Mammoth.EditorTools
                 r.transform.position = new Vector3(l * lane, y, 15f + i * 12f);
                 r.transform.localScale = Vector3.one * (air ? .62f : .55f);
 
+                // Nut body: BuildMountainPeak is a cone that tapers from a wide
+                // jittered ring at y=0 up to a point at y=1 — flipping it 180°
+                // keeps the wide ring at y=0 (top, under the cap) and sends the
+                // point hanging down, giving the classic tapered-teardrop acorn
+                // silhouette instead of a plain stretched blob.
                 var nut = new GameObject("Acorn Nut");
                 nut.transform.SetParent(r.transform, false);
-                nut.transform.localScale = new Vector3(0.9f, 1.15f, 0.9f);
+                nut.transform.localRotation = Quaternion.Euler(180f, 0f, 0f);
+                nut.transform.localScale = new Vector3(0.78f, 0.92f, 0.78f);
                 var nmf = nut.AddComponent<MeshFilter>();
                 var nmr = nut.AddComponent<MeshRenderer>();
-                nmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 31 + 9, jitter: 0.14f, subdivisions: 1);
+                nmf.sharedMesh = LowPolyMeshUtil.BuildMountainPeak(i * 31 + 9, baseJitter: 0.1f, sides: 7, tiers: 1);
                 nmr.sharedMaterial = MakeMaterial(air ? AcornNutAir : AcornNutGround);
 
+                // Cap: a shallow flattened disc sitting right at the nut's wide
+                // top ring (y=0), slightly wider than the ring so it overlaps
+                // down over the rim like a real acorn cap.
                 var cap = new GameObject("Acorn Cap");
                 cap.transform.SetParent(r.transform, false);
-                cap.transform.localPosition = new Vector3(0, 0.62f, 0);
-                cap.transform.localScale = new Vector3(1.08f, 0.5f, 1.08f);
+                cap.transform.localPosition = new Vector3(0, 0.04f, 0);
+                cap.transform.localScale = new Vector3(0.86f, 0.4f, 0.86f);
                 var cmf = cap.AddComponent<MeshFilter>();
                 var cmr = cap.AddComponent<MeshRenderer>();
-                cmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 31 + 20, jitter: 0.1f, subdivisions: 0);
+                cmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 31 + 20, jitter: 0.08f, subdivisions: 0);
                 cmr.sharedMaterial = MakeMaterial(air ? AcornCapAir : AcornCapGround);
 
                 r.AddComponent<MammothReward>().points = air ? 3 : 1;
