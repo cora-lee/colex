@@ -30,6 +30,32 @@ namespace Mammoth.EditorTools
             UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
         }
 
+        [MenuItem("Mammoth/Preview Route/Rider pulls left")] static void RL() => Rider(-1f);
+        [MenuItem("Mammoth/Preview Route/Rider pulls right")] static void RR() => Rider(1f);
+        [MenuItem("Mammoth/Preview Route/Rider release")] static void R0() => Rider(float.NaN);
+
+        [MenuItem("Mammoth/Preview Route/Bump (sit down)")]
+        static void Sit()
+        {
+            var c = Object.FindFirstObjectByType<MammothController>();
+            if (c != null) c.DebugSit();
+        }
+
+        [MenuItem("Mammoth/Preview Route/Catch an acorn")]
+        static void Catch()
+        {
+            var rider = Object.FindFirstObjectByType<MammothRider>();
+            if (rider != null) rider.DebugCatch();
+        }
+
+        static void Rider(float steer)
+        {
+            var rider = Object.FindFirstObjectByType<MammothRider>();
+            if (rider == null) { Debug.LogWarning("[Mammoth] No rider in this scene (build the Adventure scene)."); return; }
+            rider.debugSteer = steer;
+            UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
+        }
+
         static void Place(float z, float x)
         {
             var mammoth = Object.FindFirstObjectByType<MammothController>();

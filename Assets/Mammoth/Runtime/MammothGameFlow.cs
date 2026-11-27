@@ -162,7 +162,7 @@ namespace Mammoth
 
         void HandleCollision()
         {
-            if (State == MammothFlowState.Playing) AddToast("Bump!  -" + controller.collisionPenalty, Warn, 1.3f);
+            if (State == MammothFlowState.Playing) AddToast("Bump! Back on your feet...", Warn, 1.4f);
         }
 
         // =====================================================================
@@ -346,6 +346,7 @@ namespace Mammoth
             countdownStart = Time.unscaledTime;
             State = MammothFlowState.Countdown;
             if (!resume && controller != null) controller.ResetRun();
+            if (!resume) runRecorded = false;
             // Doc: during countdown, do not move, score or queue jumps and grabs.
             SetControl(false, false, false, clock: !resume ? true : false);
             SetCamera(MammothCameraMode.Follow);
@@ -371,6 +372,7 @@ namespace Mammoth
         {
             State = MammothFlowState.Ending;
             endingStart = Time.unscaledTime;
+            RecordRun();
             SetControl(false, false, false);
             if (controller != null)
             {
@@ -535,7 +537,7 @@ namespace Mammoth
                 practiceRespawnAt = Time.unscaledTime + 1.0f;
                 return;
             }
-            AddToast("+" + r.points, Mint, 1.2f);
+            AddToast("Acorn!", Mint, 1.0f);
         }
 
         void HandleEmptyGrab()
@@ -787,10 +789,10 @@ namespace Mammoth
 
             string rules =
                 "•  The route moves forward on its own.\n" +
-                "•  Steer around icebergs (a bump costs 5 points) and toward acorns.\n" +
+                "•  Steer around icebergs: a bump sits the mammoth down and costs time.\n" +
                 "•  Clap when an acorn swells near the trunk to collect it.\n" +
                 "•  High acorns need a jump first, then a clap in the air.\n" +
-                "•  <b>Speed up uphill; watch your speed downhill.</b>";
+                "•  <b>Fastest team to camp tops the ranking.</b>";
             Label(new Rect(card.x + 90f, card.y + 340f, w - 180f, 140f), rules, labelStyle.WithSize(18));
 
             if (rulesLeadToSetup)
@@ -1207,6 +1209,14 @@ namespace Mammoth
             DrawAcornIcon(new Rect(cx, right.y + (right.height - 40f) * 0.5f, iconW, 40f));
             Label(new Rect(cx + iconW + gap, right.y, textW + 4f, right.height), count, countStyle.Mid());
 
+            // Run clock under the acorn card: the time is what ranks the team.
+            string clockText = FormatTime(controller.RunTime);
+            var timeStyle = labelStyle.WithSize(26).Bold();
+            float timeW = Mathf.Max(cardW, 150f);
+            var timeCard = new Rect(view.x - timeW - 24f, right.yMax + 10f, timeW, 54f);
+            Panel(timeCard, controller.Sitting ? Warn : new Color(0.33f, 0.26f, 0.38f, 0.9f));
+            Label(timeCard, clockText, new GUIStyle(timeStyle) { alignment = TextAnchor.MiddleCenter }, Color.white);
+
             // Terrain badge under the left card
             if (controller.CurrentTerrain != MammothTerrainType.Normal)
             {
@@ -1324,7 +1334,7 @@ namespace Mammoth
             else
             {
                 Label(new Rect(card.x, card.y + 24f, w, 44f), "Paused", titleStyle.WithSize(34), Acorn);
-                Label(new Rect(card.x + 40f, card.y + 84f, w - 80f, 60f), "Take a breath. Your position, score and acorns are saved.", centerStyle.WithSize(19), InkSoft);
+                Label(new Rect(card.x + 40f, card.y + 84f, w - 80f, 60f), "Take a breath. Your position, time and acorns are saved.", centerStyle.WithSize(19), InkSoft);
             }
             if (Button(new Rect(card.x + w - 250f, card.y + h - 80f, 210f, 54f), "Continue", Acorn, ReadyToContinue)) EnterCountdown(true);
             if (Button(new Rect(card.x + 40f, card.y + h - 80f, 150f, 54f), "Home", Lilac)) EnterHome();
@@ -1345,27 +1355,96 @@ namespace Mammoth
             if (t > 2f && Button(new Rect(view.x - 160f, view.y - 66f, 136f, 44f), "Skip", Lilac)) State = MammothFlowState.Results;
         }
 
+        // ---------------- Time ranking (kept on this computer) ----------------
+        const string RankKey = "mammoth.besttimes.v1";
+        const int RankKeep = 5;
+        readonly List<Vector2> ranking = new List<Vector2>(); // x = seconds, y = acorns
+        int lastRank = -1;       // index in ranking of the run just finished, -1 if not ranked
+        bool runRecorded;
+
+        static string FormatTime(float seconds)
+        {
+            int m = Mathf.FloorToInt(seconds / 60f);
+            float sec = seconds - m * 60f;
+            return m + ":" + sec.ToString("00.0");
+        }
+
+        void LoadRanking()
+        {
+            ranking.Clear();
+            foreach (var part in PlayerPrefs.GetString(RankKey, "").Split(';'))
+            {
+                var f = part.Split('|');
+                if (f.Length == 2 && float.TryParse(f[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float t) && int.TryParse(f[1], out int a))
+                    ranking.Add(new Vector2(t, a));
+            }
+        }
+
+        /// <summary>Adds the finished run to the best-times list (fastest first,
+        /// more acorns wins a tie) and remembers where it landed.</summary>
+        void RecordRun()
+        {
+            if (runRecorded || controller == null) return;
+            runRecorded = true;
+            lastRank = -1;
+            LoadRanking();
+            float time = controller.RunTime;
+            if (time < 5f) return; // editor previews jump straight here
+            var entry = new Vector2(time, controller.Acorns);
+            int at = ranking.FindIndex(e => time < e.x || (Mathf.Approximately(time, e.x) && entry.y > e.y));
+            if (at < 0) at = ranking.Count;
+            ranking.Insert(at, entry);
+            if (ranking.Count > RankKeep) ranking.RemoveRange(RankKeep, ranking.Count - RankKeep);
+            lastRank = at < RankKeep ? at : -1;
+            var sb = new System.Text.StringBuilder();
+            foreach (var e in ranking)
+                sb.Append(e.x.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)).Append('|').Append((int)e.y).Append(';');
+            PlayerPrefs.SetString(RankKey, sb.ToString());
+            PlayerPrefs.Save();
+        }
+
         void DrawResults()
         {
-            float w = 560f, h = 470f;
-            var card = new Rect(CenterX(w), 100f, w, h);
+            float w = 600f, h = 610f;
+            var card = new Rect(CenterX(w), 54f, w, h);
             Panel(card, Cream);
-            Label(new Rect(card.x, card.y + 24f, w, 50f), "We made it to camp", titleStyle.WithSize(36), Acorn);
+            Label(new Rect(card.x, card.y + 20f, w, 50f), "We made it to camp", titleStyle.WithSize(36), Acorn);
             int acorns = controller != null ? controller.Acorns : 0;
-            int score = controller != null ? controller.Score : 0;
             int hits = controller != null ? controller.Collisions : 0;
-            if (acorns >= totalAcorns)
+            float time = controller != null ? controller.RunTime : 0f;
+
+            // The time is the headline: it decides the rank.
+            Label(new Rect(card.x, card.y + 74f, w, 64f), FormatTime(time), titleStyle.WithSize(56), Ink);
+            string rankLine = lastRank == 0 ? "New best time!" : lastRank > 0 ? "Rank #" + (lastRank + 1) + " on this computer" : "Not in the top " + RankKeep + " yet";
+            var badge = new Rect(card.x + w * 0.5f - 150f, card.y + 142f, 300f, 34f);
+            Panel(badge, lastRank == 0 ? Butter : new Color(0.9f, 0.88f, 0.92f), false);
+            Label(badge, rankLine, centerStyle.WithSize(17).Bold(), Ink);
+
+            float y = card.y + 190f;
+            Row(card, ref y, "Acorns", acorns + " / " + totalAcorns + (acorns >= totalAcorns ? "  (all!)" : ""));
+            Row(card, ref y, "Bumps", hits.ToString());
+
+            // Best times
+            y += 2f;
+            Label(new Rect(card.x + 80f, y, 300f, 28f), "Best times", labelStyle.WithSize(18).Bold(), InkSoft);
+            y += 32f;
+            for (int i = 0; i < RankKeep; i++)
             {
-                var badge = new Rect(card.x + w * 0.5f - 110f, card.y + 84f, 220f, 36f);
-                Panel(badge, Butter, false);
-                Label(badge, "Full collection!", centerStyle.WithSize(18).Bold(), Ink);
+                var row = new Rect(card.x + 70f, y, w - 140f, 34f);
+                bool mine = i == lastRank;
+                if (mine) { var old = GUI.color; GUI.color = new Color(Mint.r, Mint.g, Mint.b, 0.45f); Pill(row); GUI.color = old; }
+                Label(new Rect(row.x + 14f, row.y, 40f, row.height), (i + 1) + ".", labelStyle.WithSize(19).Bold().Mid(), mine ? Ink : InkSoft);
+                if (i < ranking.Count)
+                {
+                    Label(new Rect(row.x + 56f, row.y, 160f, row.height), FormatTime(ranking[i].x), labelStyle.WithSize(20).Bold().Mid(), Ink);
+                    Label(new Rect(row.x, row.y, row.width - 14f, row.height), (int)ranking[i].y + " acorns", new GUIStyle(labelStyle.WithSize(17)) { alignment = TextAnchor.MiddleRight }, InkSoft);
+                }
+                else Label(new Rect(row.x + 56f, row.y, 160f, row.height), "-", labelStyle.WithSize(20).Mid(), InkSoft);
+                y += 36f;
             }
-            float y = card.y + 140f;
-            Row(card, ref y, "Acorns", acorns + " / " + totalAcorns);
-            Row(card, ref y, "Score", score.ToString());
-            Row(card, ref y, "Collisions", hits.ToString());
-            if (Button(new Rect(card.x + 50f, card.y + h - 90f, 210f, 58f), "Play again", Acorn)) EnterReady();
-            if (Button(new Rect(card.x + w - 260f, card.y + h - 90f, 210f, 58f), "Home", Lilac)) EnterHome();
+
+            if (Button(new Rect(card.x + 60f, card.y + h - 78f, 220f, 56f), "Play again", Acorn)) EnterReady();
+            if (Button(new Rect(card.x + w - 280f, card.y + h - 78f, 220f, 56f), "Home", Lilac)) EnterHome();
         }
 
         void Row(Rect card, ref float y, string name, string value)

@@ -17,7 +17,7 @@ namespace Mammoth.EditorTools
     /// trees (11.2 to 21), mountains (24+). Acorns sit on one smooth line on the
     /// road, so nothing hides them and they can be reached on a natural path.
     /// </summary>
-    public static class MammothDemoSceneBuilder
+    public static partial class MammothDemoSceneBuilder
     {
         const string ScenePath = "Assets/Scenes/MammothDemo.unity";
         const float SnowEndZ = 330f;
@@ -77,6 +77,14 @@ namespace Mammoth.EditorTools
         [MenuItem("Mammoth/Create Demo Scene")]
         public static void Create()
         {
+            V2 = false;
+            Build();
+        }
+
+        static void Build()
+        {
+            Materials.Clear(); SlickMaterials.Clear(); GlossMaterials.Clear(); FlatPrimitive.Clear();
+            acornNutMesh = null; acornCapMesh = null; polyBalls[0] = polyBalls[1] = polyBalls[2] = null;
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
@@ -92,7 +100,8 @@ namespace Mammoth.EditorTools
             BuildLandmarks();
             BuildCampsite();
 
-            var mammoth = BuildMammoth(out var squirrel, out var trunkPivot);
+            Transform squirrel, trunkPivot;
+            var mammoth = V2 ? BuildMammothV2(out squirrel, out trunkPivot) : BuildMammoth(out squirrel, out trunkPivot);
             var grabPoint = new GameObject("Grab Origin").transform;
             grabPoint.SetParent(mammoth.transform, false);
             grabPoint.localPosition = new Vector3(0, 1.1f, 1.6f);
@@ -117,6 +126,8 @@ namespace Mammoth.EditorTools
             controller.squirrel = squirrel;
             controller.trunk = trunkPivot;
             controller.terrain = BuildTerrainZones();
+            var riderComp = mammoth.GetComponent<MammothRider>();
+            if (riderComp != null) { riderComp.controller = controller; controller.trunkRaiseAngle = 150f; }
             var hud = systems.AddComponent<MammothDebugHud>();
             hud.receiver = receiver;
             hud.controller = controller;
@@ -126,6 +137,7 @@ namespace Mammoth.EditorTools
             camPreview.show = false;
 
             SetupLighting();
+            if (V2) SetupLightingV2();
 
             MammothFollowCamera follow = null;
             var cam = Camera.main;
@@ -139,7 +151,7 @@ namespace Mammoth.EditorTools
                 follow.controller = controller;
                 follow.mode = MammothCameraMode.Showcase;
                 cam.backgroundColor = SkyHorizon;
-                cam.clearFlags = CameraClearFlags.SolidColor;
+                cam.clearFlags = V2 ? CameraClearFlags.Skybox : CameraClearFlags.SolidColor;
             }
 
             BuildRewards(cfg, out var practiceTemplate);
@@ -154,12 +166,13 @@ namespace Mammoth.EditorTools
             flow.practiceAcornTemplate = practiceTemplate;
 
             System.IO.Directory.CreateDirectory("Assets/Scenes");
-            EditorSceneManager.SaveScene(scene, ScenePath);
+            EditorSceneManager.SaveScene(scene, ActiveScenePath);
             var list = EditorBuildSettings.scenes.ToList();
-            if (!list.Any(s => s.path == ScenePath)) list.Insert(0, new EditorBuildSettingsScene(ScenePath, true));
+            list.RemoveAll(s => s.path == ActiveScenePath);
+            list.Insert(0, new EditorBuildSettingsScene(ActiveScenePath, true));
             EditorBuildSettings.scenes = list.ToArray();
             Selection.activeGameObject = mammoth;
-            Debug.Log("[Mammoth] Demo scene saved to " + ScenePath + ". Press Play: the home screen opens first.");
+            Debug.Log("[Mammoth] Scene saved to " + ActiveScenePath + ". Press Play: the home screen opens first.");
         }
 
         // =====================================================================
@@ -875,6 +888,8 @@ namespace Mammoth.EditorTools
 
         static void SetupSkyAndFog()
         {
+            if (V2) { SetupNaturalSky(); return; }
+            RenderSettings.skybox = null;
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogColor = SkyHorizon;
@@ -981,6 +996,7 @@ namespace Mammoth.EditorTools
 
         static GameObject BuildAcorn(Transform parent, string name, Vector3 pos, bool air, int i)
         {
+            if (V2) return BuildAcornV2(parent, name, pos, air);
             var r = new GameObject(name);
             r.transform.SetParent(parent);
             r.transform.position = pos;
@@ -1064,6 +1080,9 @@ namespace Mammoth.EditorTools
         static void SaveMesh(Mesh mesh, string name)
         {
             System.IO.Directory.CreateDirectory("Assets/Mammoth/Generated");
+            // The new scene keeps its own mesh assets so rebuilding one scene
+            // never breaks the other.
+            if (V2) name = "Adventure " + name;
             string path = "Assets/Mammoth/Generated/" + name.Replace('/', '_') + ".asset";
             AssetDatabase.DeleteAsset(path);
             AssetDatabase.CreateAsset(mesh, path);

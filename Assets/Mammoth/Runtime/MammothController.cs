@@ -116,8 +116,31 @@ namespace Mammoth
         public float collisionProtectSeconds = 1f;
         [Tooltip("Mammoth body radius used against obstacle footprints.")]
         public float bodyRadius = 0.55f;
+        [Tooltip("A bump makes the mammoth sit down for this long. It costs time, not points.")]
+        public float sitSeconds = 1.5f;
+        [Tooltip("How far the trunk swings up for a grab, in degrees.")]
+        public float trunkRaiseAngle = 110f;
+
         double slowUntil = -1;
         double protectUntil = -1;
+        double sitUntil = -1;
+        float grabPoseUntil = -1f;
+
+        /// <summary>Seconds of play in this run (stops while paused or finished).</summary>
+        public float RunTime { get; private set; }
+        public bool Sitting => clock < sitUntil;
+        /// <summary>Editor preview only.</summary>
+        public void DebugSit() => sitUntil = clock + sitSeconds;
+        /// <summary>0..1 sit pose for the art: quick flop down, slower push back up.</summary>
+        public float SitAmount
+        {
+            get
+            {
+                if (clock >= sitUntil) return 0f;
+                float left = (float)(sitUntil - clock);
+                return Mathf.Clamp01(Mathf.Min((sitSeconds - left) / 0.18f, left / 0.4f));
+            }
+        }
 
         MammothSettings cfg;
         MammothMotion motion = new MammothMotion();
@@ -172,7 +195,8 @@ namespace Mammoth
             collectedIds.Clear();
             motion = new MammothMotion();
             grabOpen = false;
-            slowUntil = -1; protectUntil = -1;
+            slowUntil = -1; protectUntil = -1; sitUntil = -1; grabPoseUntil = -1f;
+            RunTime = 0f;
             keySpeed = Mathf.Lerp(cfg.min_speed, cfg.max_speed, 0.4f);
             foreach (var o in MammothObstacle.Active) o.hitThisPass = false;
             SetTrunkRaised(false);
@@ -227,7 +251,9 @@ namespace Mammoth
             float mult = MammothRoute.SpeedMultiplier(distance);
             if (CurrentTerrain == MammothTerrainType.Mud) mult *= mudSpeedFactor;
             if (clock < slowUntil) mult *= collisionSlowFactor;
+            if (Sitting) mult = 0f;
             ActualSpeed = (moveForward && !holdPosition) ? speedIn * mult : 0f;
+            if (moveForward && !holdPosition && clockRunning) RunTime += dt;
             distance += ActualSpeed * worldScale * dt;
 
             if (moveForward && !holdPosition && clockRunning) CheckCollisions();
@@ -310,6 +336,7 @@ namespace Mammoth
             LastGrabTime = Time.time;
             grabOpen = true;
             grabOpenUntil = clock + grabWindow;
+            grabPoseUntil = Mathf.Max(grabPoseUntil, Time.time + 0.3f);
             if (TryCollect()) return;
         }
 
@@ -331,6 +358,7 @@ namespace Mammoth
             if (best == null) return false;
             grabOpen = false;
             LastGrabHit = true;
+            grabPoseUntil = Time.time + 0.9f;
             if (!best.practice)
             {
                 if (collectedIds.Contains(best.id)) return true;
@@ -354,10 +382,11 @@ namespace Mammoth
                 // Continuous contact never deducts again; pass through it.
                 if (o.hitThisPass || clock < protectUntil) continue;
                 o.hitThisPass = true;
-                protectUntil = clock + collisionProtectSeconds;
-                slowUntil = clock + collisionSlowSeconds;
+                // No point penalty: the mammoth flops down and the clock keeps running.
+                sitUntil = clock + sitSeconds;
+                protectUntil = sitUntil + collisionProtectSeconds;
+                lateralVel = 0f;
                 Collisions++;
-                Score = Mathf.Max(0, Score - collisionPenalty);
                 Wobble(0.7f);
                 OnCollision?.Invoke();
             }
@@ -422,8 +451,9 @@ namespace Mammoth
 
             if (trunk != null)
             {
-                trunkRaise = Mathf.MoveTowards(trunkRaise, trunkRaised ? 1f : 0f, dt * 1.5f);
-                trunk.localRotation = trunkBaseRot * Quaternion.Euler(-110f * trunkRaise, 0f, 0f);
+                bool up = trunkRaised || Time.time < grabPoseUntil;
+                trunkRaise = Mathf.MoveTowards(trunkRaise, up ? 1f : 0f, dt * (trunkRaised ? 1.5f : 6f));
+                trunk.localRotation = trunkBaseRot * Quaternion.Euler(-trunkRaiseAngle * trunkRaise, 0f, 0f);
             }
         }
 
