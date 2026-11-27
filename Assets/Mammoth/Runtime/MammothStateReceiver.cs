@@ -59,6 +59,17 @@ namespace Mammoth
             return true;
         }
 
+        bool soloMode;
+        public bool SoloMode => soloMode;
+
+        /// <summary>Solo play: one person can calibrate alone; the keyboard
+        /// covers the roles nobody is standing in. Restarts calibration.</summary>
+        public void SetSolo(bool on)
+        {
+            soloMode = on;
+            if (mapping != null) { mapping.soloMode = on; mapping.Reset(); }
+        }
+
         [Header("Common")]
         [Tooltip("Abort a request / treat tracking as lost after this many seconds without a fresh state.")]
         public float receiveTimeout = 0.5f;
@@ -168,6 +179,7 @@ namespace Mammoth
 
             var cfg = MammothSettingsAsset.Load(false);
             mapping = new MammothGestureMapping(cfg);
+            mapping.soloMode = soloMode;
             Status = poseEngine.Status;
         }
 

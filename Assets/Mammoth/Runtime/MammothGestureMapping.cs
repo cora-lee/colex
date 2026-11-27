@@ -61,13 +61,19 @@ namespace Mammoth
         /// tester can play with whichever roles the camera sees.</summary>
         public void ForceCalibrate() { neutralSet = true; calibrating = false; }
 
+        /// <summary>Solo play: calibration starts as soon as anyone is in view,
+        /// instead of waiting for all three regions.</summary>
+        public bool soloMode;
+
         public MammothState Update(ZoneObservation?[] obs, double now)
         {
             var a = obs[0]; var b = obs[1]; var c = obs[2];
             double dt = lastNow.HasValue ? Math.Min(0.2, Math.Max(0, now - lastNow.Value)) : 0.03;
             lastNow = now;
 
-            bool ready = a.HasValue && b.HasValue && c.HasValue && c.Value.jumpValid && c.Value.clapValid;
+            bool ready = soloMode
+                ? (a.HasValue || b.HasValue || c.HasValue)
+                : a.HasValue && b.HasValue && c.HasValue && c.Value.jumpValid && c.Value.clapValid;
 
             if (calibrating)
             {

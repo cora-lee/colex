@@ -897,16 +897,22 @@ namespace Mammoth
             {
                 // Calibration, step by step: 1 everyone in their region,
                 // 2 hands down and apart, 3 hold still for 3 seconds.
+                bool solo = receiver != null && receiver.SoloMode;
                 var miss = new List<string>();
                 bool allIn = s != null && s.visible != null && s.visible.Length >= 3;
                 if (allIn) for (int i = 0; i < 3; i++) if (!s.visible[i]) { miss.Add(roles[i]); allIn = false; }
                 if (s == null || s.visible == null) miss.AddRange(roles);
+                bool anyIn = false;
+                if (s != null && s.visible != null) foreach (bool v in s.visible) anyIn |= v;
                 float prog = s != null ? s.calibrationProgress : 0f;
                 if (calibrated) prog = 1f;
                 status = null;
                 float y = card.y + 92f;
                 Label(new Rect(sx, y, sw, 28f), "Calibration", labelStyle.WithSize(20).Bold(), Acorn); y += 34f;
-                CalibStep(sx, ref y, sw, "1  Everyone in their region", allIn || calibrated, allIn || calibrated ? null : "Missing: " + string.Join(", ", miss));
+                if (solo)
+                    CalibStep(sx, ref y, sw, "1  Stand in one region", anyIn || calibrated, anyIn || calibrated ? null : "Pick Speed, Direction or Jump + Trunk");
+                else
+                    CalibStep(sx, ref y, sw, "1  Everyone in their region", allIn || calibrated, allIn || calibrated ? null : "Missing: " + string.Join(", ", miss));
                 CalibStep(sx, ref y, sw, "2  Hands down and apart", calibrated || prog > 0f, null);
                 CalibStep(sx, ref y, sw, "3  Hold still for 3 seconds", calibrated, null);
                 var bar = new Rect(sx, y + 6f, sw, 14f);
@@ -914,7 +920,7 @@ namespace Mammoth
                 GUI.color = new Color(0.88f, 0.86f, 0.9f); Pill(bar);
                 if (prog > 0.02f) { GUI.color = calibrated ? Mint : Acorn; Pill(new Rect(bar.x, bar.y, Mathf.Max(14f, bar.width * prog), bar.height)); }
                 GUI.color = oldc;
-                Label(new Rect(sx, y + 26f, sw, 24f), calibrated ? "Calibrated. Keep your hands down." : (prog > 0f ? "Calibrating... hold still" : "Waiting for all three players"), smallStyle, calibrated ? Mint : InkSoft);
+                Label(new Rect(sx, y + 26f, sw, 24f), calibrated ? "Calibrated. Keep your hands down." : (prog > 0f ? "Calibrating... hold still" : (solo ? "Waiting for you" : "Waiting for all three players")), smallStyle, calibrated ? Mint : InkSoft);
             }
             if (status != null) Label(new Rect(sx, card.y + 90f, sw, 200f), status, labelStyle.WithSize(19), statusColor);
 
@@ -923,10 +929,19 @@ namespace Mammoth
             if (Button(new Rect(card.x + 210f, card.y + h - 76f, 230f, 52f), "Keyboard test mode", Sky)) UseKeyboard(true);
             if (!browserMode && !camReady && Button(new Rect(sx, card.y + 330f, sw, 54f), "Use Chrome camera", Mint)) UseBrowserCamera();
             else if (browserMode && !calibrated && Button(new Rect(sx, card.y + 330f, sw, 54f), "Reopen camera page", Mint)) UseBrowserCamera();
-            if (!browserMode && camReady && !calibrated && Button(new Rect(sx, card.y + 330f, sw, 50f), "Skip calibration (test)", Lilac))
+            if (!browserMode && camReady && !calibrated && receiver != null)
             {
-                receiver.ForceCalibrate();
-                AddToast("Calibration skipped: keyboard covers empty roles", Butter, 2.5f);
+                bool soloOn = receiver.SoloMode;
+                if (Button(new Rect(sx, card.y + 330f, sw, 50f), soloOn ? "Solo play: on" : "Play solo", soloOn ? Mint : Acorn))
+                {
+                    receiver.SetSolo(!soloOn);
+                    AddToast(soloOn ? "Waiting for all three players" : "Solo: stand in one region. Keyboard covers the rest.", Butter, 2.8f);
+                }
+                if (Button(new Rect(sx, card.y + 390f, sw, 44f), "Skip calibration (test)", Lilac))
+                {
+                    receiver.ForceCalibrate();
+                    AddToast("Calibration skipped: keyboard covers empty roles", Butter, 2.5f);
+                }
             }
         }
 
