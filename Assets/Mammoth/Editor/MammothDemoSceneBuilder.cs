@@ -770,10 +770,8 @@ namespace Mammoth.EditorTools
             Part(group, PrimitiveType.Cylinder, "Arch Post L", new Vector3(-4.7f, fy + 2.1f, fz), new Vector3(0.22f, 2.1f, 0.22f), Wood, flat: false);
             Part(group, PrimitiveType.Cylinder, "Arch Post R", new Vector3(4.7f, fy + 2.1f, fz), new Vector3(0.22f, 2.1f, 0.22f), Wood, flat: false);
             Part(group, PrimitiveType.Cube, "Arch Banner", new Vector3(0f, fy + 3.85f, fz), new Vector3(9.8f, 0.9f, 0.14f), SignBoard, flat: true);
-            Text(group.transform, "Campsite", new Vector3(0f, fy + 3.85f, fz - 0.09f), 0.22f, 64);
-            // Readable from inside the camp too (the ending camera looks back at it).
-            var back = Text(group.transform, "Welcome", new Vector3(0f, fy + 3.85f, fz + 0.09f), 0.22f, 64);
-            back.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+            // One clear word on the side the team rides toward.
+            Text(group.transform, "FINISH", new Vector3(0f, fy + 3.85f, fz - 0.09f), 0.24f, 64);
             for (int i = 0; i < 7; i++)
             {
                 float x = -4.2f + i * 1.4f;
@@ -805,8 +803,28 @@ namespace Mammoth.EditorTools
             tm.color = new Color(0.42f, 0.28f, 0.2f);
             var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             tm.font = font;
-            go.GetComponent<MeshRenderer>().sharedMaterial = font.material;
+            go.GetComponent<MeshRenderer>().sharedMaterial = WorldTextMaterial(font);
             return go;
+        }
+
+        /// <summary>Font material that respects depth, so the sign text never
+        /// shows through the mammoth or the banner.</summary>
+        static Material WorldTextMaterial(Font font)
+        {
+            var shader = Shader.Find("Mammoth/WorldText");
+            if (shader == null) return font.material;
+            const string path = "Assets/Mammoth/Materials/Mammoth World Text.mat";
+            var m = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (m == null)
+            {
+                m = new Material(shader) { name = "Mammoth World Text" };
+                System.IO.Directory.CreateDirectory("Assets/Mammoth/Materials");
+                AssetDatabase.CreateAsset(m, path);
+            }
+            m.shader = shader;
+            m.mainTexture = font.material.mainTexture;
+            EditorUtility.SetDirty(m);
+            return m;
         }
 
         static void BuildCampsite()

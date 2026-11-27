@@ -224,9 +224,12 @@ namespace Mammoth.EditorTools
             var body = Pivot(rig, "Body", Vector3.zero);
             MeshPart(body, "Torso", Loft("Mammoth Torso", new[]
             {
-                Slice(-1.32f, 1.30f, 0.30f, 0.38f),
-                Slice(-1.12f, 1.30f, 0.62f, 0.74f),
-                Slice(-0.62f, 1.40f, 0.80f, 0.92f),
+                // rounded rump: several shrinking sections instead of a flat cap
+                Slice(-1.44f, 1.42f, 0.08f, 0.10f),
+                Slice(-1.38f, 1.38f, 0.36f, 0.44f),
+                Slice(-1.24f, 1.34f, 0.60f, 0.72f),
+                Slice(-1.0f, 1.34f, 0.76f, 0.88f),
+                Slice(-0.62f, 1.40f, 0.84f, 0.96f),
                 Slice(-0.05f, 1.54f, 0.86f, 1.04f),
                 Slice(0.42f, 1.70f, 0.84f, 1.14f),
                 Slice(0.80f, 1.72f, 0.68f, 0.98f),
@@ -234,9 +237,15 @@ namespace Mammoth.EditorTools
             }, 8, 2.7f), Vector3.zero, Vector3.one, HideGrey);
             rider.body = body.transform;
 
-            var tail = Pivot(body, "Tail", new Vector3(0f, 1.72f, -1.24f));
-            tail.transform.localRotation = Quaternion.Euler(-24f, 0f, 0f);
-            MeshPart(tail, "Tail", Tube("Mammoth Tail", new[] { Vector3.zero, new Vector3(0f, -0.34f, 0f), new Vector3(0f, -0.62f, 0f), new Vector3(0f, -0.8f, 0f) }, new[] { 0.07f, 0.055f, 0.085f, 0.03f }, 5), Vector3.zero, Vector3.one, HideDark);
+            // Tail: sticks out from the top of the rump, curves down, ends in a tuft.
+            var tail = Pivot(body, "Tail", new Vector3(0f, 1.86f, -1.3f));
+            MeshPart(tail, "Tail", Tube("Mammoth Tail", new[]
+            {
+                new Vector3(0f, 0.05f, 0.12f), new Vector3(0f, 0.02f, -0.12f), new Vector3(0f, -0.18f, -0.28f),
+                new Vector3(0f, -0.48f, -0.34f), new Vector3(0f, -0.74f, -0.32f),
+            }, new[] { 0.12f, 0.1f, 0.085f, 0.075f, 0.07f }, 6), Vector3.zero, Vector3.one, LockDark);
+            Poly(tail, "Tail Tuft", new Vector3(0f, -0.9f, -0.33f), new Vector3(0.36f, 0.5f, 0.32f), LockDark, new Vector3(0f, 45f, 0f), 1);
+            Poly(tail, "Tail Tuft Tip", new Vector3(0f, -1.12f, -0.33f), new Vector3(0.22f, 0.26f, 0.2f), LockDark, null, 0);
             rider.tail = tail.transform;
 
             // Pillar legs with a flared foot and pale nails (FL, FR, BL, BR).
