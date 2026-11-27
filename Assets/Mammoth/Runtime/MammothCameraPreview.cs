@@ -17,6 +17,12 @@ namespace Mammoth
     /// the player can resize the box by dragging its top-left corner with the
     /// mouse, which only changes widthFraction (height follows the fixed
     /// aspect ratio automatically).
+    ///
+    /// Clicking anywhere on the box itself (not the resize handle) toggles a
+    /// diagnostics popup, drawn natively in Unity, that shows per-zone
+    /// recognition status (left/center/right), calibration progress, and the
+    /// connection state. All of that already arrives over /state — this just
+    /// surfaces it in Unity instead of needing to check the browser page.
     /// </summary>
     public class MammothCameraPreview : MonoBehaviour
     {
@@ -43,26 +49,36 @@ namespace Mammoth
         // Size of the draggable grip square at the top-left corner, in pixels.
         const float HandleSize = 20f;
 
+        // A mouse-down/up pair that moved less than this (in pixels) counts as a
+        // click rather than the start of a resize drag.
+        const float ClickDragThreshold = 6f;
+
         Texture2D texture;
         int lastVersion = -1;
         Texture2D borderTex;
         Texture2D handleTex;
+        Texture2D panelTex;
 
         bool dragging;
-        Vector2 dragStartMouse;
+        Vector2 mouseDownPos;
         float dragStartWidthFraction;
+        bool showDiagnostics;
+
+        GUIStyle panelStyle;
+        GUIStyle titleStyle;
 
         void Start()
         {
             if (receiver == null) receiver = FindFirstObjectByType<MammothStateReceiver>();
             texture = new Texture2D(2, 2, TextureFormat.RGB24, false);
 
-            // Flat-color textures for the border and the resize grip, drawn behind/
-            // over the camera texture. Avoids GUI.Box: Unity's default skin renders
-            // its own dark panel fill, which on top of an also-dark camera frame
-            // reads as two stacked black boxes instead of one framed preview.
+            // Flat-color textures for the border, resize grip, and the diagnostics
+            // popup background. Avoids GUI.Box: Unity's default skin renders its
+            // own dark panel fill, which on top of an also-dark camera frame reads
+            // as two stacked black boxes instead of one framed preview.
             borderTex = MakeFlatTex(new Color(1f, 1f, 1f, 0.85f));
             handleTex = MakeFlatTex(new Color(1f, 1f, 1f, 0.95f));
+            panelTex = MakeFlatTex(new Color(0.05f, 0.05f, 0.08f, 0.92f));
         }
 
         static Texture2D MakeFlatTex(Color c)
@@ -86,7 +102,7 @@ namespace Mammoth
                 }
             }
 
-            HandleResizeDrag();
+            HandleMouse();
         }
 
         Rect GetBoxRect()
@@ -108,22 +124,30 @@ namespace Mammoth
         // GUI/OnGUI rects have theirs at the top-left, so the y axis needs flipping.
         static Vector2 MouseToGuiSpace() => new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
 
-        void HandleResizeDrag()
+        void HandleMouse()
         {
             if (!show || lastVersion < 0) return;
+
+            Rect box = GetBoxRect();
 
             if (Input.GetMouseButtonDown(0))
             {
                 Vector2 mouse = MouseToGuiSpace();
-                if (GetHandleRect(GetBoxRect()).Contains(mouse))
+                mouseDownPos = mouse;
+                if (GetHandleRect(box).Contains(mouse))
                 {
                     dragging = true;
-                    dragStartMouse = mouse;
                     dragStartWidthFraction = widthFraction;
                 }
             }
             else if (Input.GetMouseButtonUp(0))
             {
+                Vector2 mouse = MouseToGuiSpace();
+                bool wasClick = Vector2.Distance(mouse, mouseDownPos) < ClickDragThreshold;
+                if (wasClick && !dragging && box.Contains(mouse))
+                {
+                    showDiagnostics = !showDiagnostics;
+                }
                 dragging = false;
             }
 
@@ -134,7 +158,7 @@ namespace Mammoth
                 // top-left handle further left/up grows the box; dragging it
                 // toward the anchor shrinks it. Horizontal movement alone decides
                 // the size — height always follows from the aspect ratio.
-                float deltaX = dragStartMouse.x - mouse.x;
+                float deltaX = mouseDownPos.x - mouse.x;
                 float deltaFraction = deltaX / Screen.width;
                 widthFraction = Mathf.Clamp(dragStartWidthFraction + deltaFraction, MinWidthFraction, MaxWidthFraction);
             }
@@ -143,6 +167,13 @@ namespace Mammoth
         void OnGUI()
         {
             if (!show || texture == null || lastVersion < 0) return;
+
+            if (panelStyle == null)
+            {
+                panelStyle = new GUIStyle(GUI.skin.label) { fontSize = 14, richText = true, wordWrap = false };
+                panelStyle.normal.textColor = Color.white;
+                titleStyle = new GUIStyle(panelStyle) { fontSize = 15, fontStyle = FontStyle.Bold };
+            }
 
             Rect box = GetBoxRect();
             const float border = 2f;
@@ -154,6 +185,57 @@ namespace Mammoth
             // Small grip square at the top-left corner, so the resize handle is
             // discoverable instead of being an invisible hit area.
             GUI.DrawTexture(GetHandleRect(box), handleTex);
+
+            if (showDiagnostics) DrawDiagnostics(box);
+        }
+
+        void DrawDiagnostics(Rect box)
+        {
+            const float panelWidth = 260f;
+            const float panelHeight = 150f;
+            const float gap = 8f;
+
+            // Sits just above the camera box, right-aligned with it, so it never
+            // covers the play route even when the box itself is down in the corner.
+            float x = Mathf.Min(box.xMax - panelWidth, Screen.width - panelWidth - 4f);
+            float y = box.y - panelHeight - gap;
+            var panelRect = new Rect(x, Mathf.Max(4f, y), panelWidth, panelHeight);
+
+            GUI.DrawTexture(panelRect, panelTex);
+
+            var inner = new Rect(panelRect.x + 12f, panelRect.y + 10f, panelRect.width - 24f, panelRect.height - 20f);
+            GUILayout.BeginArea(inner);
+            GUILayout.Label("Camera recognition", titleStyle);
+
+            bool connected = receiver != null && receiver.Connected;
+            string connLine = connected ? "<color=#7CFC7C>connected</color>" : "<color=#FF7A7A>not connected</color>";
+            GUILayout.Label(connLine, panelStyle);
+
+            var s = receiver != null ? receiver.State : null;
+            if (s == null || !connected)
+            {
+                GUILayout.Label(receiver != null ? receiver.Status : "no receiver", panelStyle);
+            }
+            else
+            {
+                GUILayout.Label(ZoneLine("Left", s.visible, 0) + "   " + ZoneLine("Center", s.visible, 1) + "   " + ZoneLine("Right", s.visible, 2), panelStyle);
+
+                string calLine = s.calibrated
+                    ? "<color=#7CFC7C>calibrated</color>"
+                    : s.calibrating
+                        ? "<color=#FFD54A>calibrating…</color>"
+                        : "<color=#FF7A7A>not calibrating</color>";
+                GUILayout.Label(calLine, panelStyle);
+            }
+
+            GUILayout.EndArea();
+        }
+
+        static string ZoneLine(string label, bool[] visible, int i)
+        {
+            bool ok = visible != null && visible.Length > i && visible[i];
+            string tag = ok ? "<color=#7CFC7C>OK</color>" : "<color=#FF7A7A>--</color>";
+            return label + " " + tag;
         }
     }
 }
