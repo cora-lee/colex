@@ -330,46 +330,59 @@ namespace Mammoth.EditorTools
             return 0f;
         }
 
-        /// <summary>True when an iceberg at (x, z) with footprint r leaves the acorn
-        /// line clear around it and a little before it (so it can't block the
-        /// view of an acorn from the follow camera either).</summary>
-        static bool KeepsPathClear(float x, float z, float r)
+        /// <summary>True when an iceberg at (x, z) with footprint r neither sits
+        /// on an acorn nor stands just in front of one (where it would hide it
+        /// from the follow camera or box it in). Between acorns icebergs may cut
+        /// into the road freely, like the original layout.</summary>
+        static bool KeepsAcornsClear(float x, float z, float r)
         {
-            for (float zz = z - r - 9f; zz <= z + r; zz += 1f)
-                if (Mathf.Abs(x - PathX(zz)) - r < 1.5f) return false;
+            foreach (var a in AcornPath)
+            {
+                if (z + r < a.z - 9f || z - r > a.z + 2f) continue;
+                if (Mathf.Abs(x - a.x) - r < 1.6f) return false;
+            }
             return true;
         }
 
-        /// <summary>Icebergs like the original: mixed sizes, scattered on both
-        /// sides and cutting into the road as obstacles to steer around. The
-        /// acorn line always keeps a clear lane, so acorns are never hidden or
-        /// boxed in. None on the summit (doc: no penalty obstacles there).</summary>
+        /// <summary>Doc: the route must never force an unavoidable collision. Keep
+        /// at least a 2.4-wide gap on the road wherever icebergs face each other.</summary>
+        static bool LeavesGap(float x, float z, float r)
+        {
+            float inner = Mathf.Abs(x) - r;           // distance from road center to its inner edge
+            if (MammothRoute.RoadHalfWidth + inner < 2.4f) return false;
+            foreach (var p in placedIcebergs)
+            {
+                if (Mathf.Sign(p.x) == Mathf.Sign(x)) continue;
+                if (Mathf.Abs(p.y - z) > p.z + r + 1.5f) continue;
+                float otherInner = Mathf.Abs(p.x) - p.z;
+                if (Mathf.Min(inner, MammothRoute.RoadHalfWidth) + Mathf.Min(otherInner, MammothRoute.RoadHalfWidth) < 2.4f) return false;
+            }
+            return true;
+        }
+
+        /// <summary>Icebergs like the original: mixed sizes, close to the road on
+        /// both sides and cutting into it as obstacles to steer around. Acorns
+        /// stay unblocked and there is always a way through. None on the summit
+        /// (doc: no penalty obstacles there).</summary>
         static void BuildIcebergsAndRocks()
         {
             var group = new GameObject("Icebergs");
             placedIcebergs.Clear();
             var rng = new System.Random(11);
             int made = 0;
-            for (int i = 0; i < 120 && made < 34; i++)
+            for (int i = 0; i < 600 && made < 46; i++)
             {
                 int side = i % 2 == 0 ? -1 : 1;
                 float z = Mathf.Lerp(-12f, MammothRoute.CampStartZ - 8f, (float)rng.NextDouble());
                 if (z > MammothRoute.SummitStartZ - 6f && z < MammothRoute.SummitEndZ + 6f) continue;
                 float scale = Mathf.Lerp(1.4f, 4.2f, (float)rng.NextDouble());
-                if (z > SnowEndZ) scale *= 0.8f; // retreating ice downhill
+                if (z > SnowEndZ) scale *= 0.85f; // retreating ice downhill
                 float x = side * (3.8f + (float)rng.NextDouble() * 3.2f);
                 float r = scale * 0.85f;
-                // Nudge outward until the acorn line is clear, or skip it.
-                bool ok = false;
-                for (int k = 0; k < 8 && !ok; k++)
-                {
-                    if (KeepsPathClear(x, z, r)) ok = true;
-                    else x += side * 0.5f;
-                }
-                if (!ok) continue;
+                if (!KeepsAcornsClear(x, z, r) || !LeavesGap(x, z, r)) continue;
                 bool crowded = false;
                 foreach (var p in placedIcebergs)
-                    if (new Vector2(p.x - x, p.y - z).magnitude < (p.z + r) * 0.8f) { crowded = true; break; }
+                    if (new Vector2(p.x - x, p.y - z).magnitude < (p.z + r) * 0.6f) { crowded = true; break; }
                 if (crowded) continue;
 
                 var go = new GameObject("Iceberg");
@@ -379,11 +392,11 @@ namespace Mammoth.EditorTools
                 go.transform.localScale = Vector3.one * scale;
                 go.AddComponent<MeshFilter>().sharedMesh = LowPolyMeshUtil.BuildIceChunk(made * 97 + 5, jitter: 0.32f, subdivisions: 1);
                 go.AddComponent<MeshRenderer>().sharedMaterial = MakeMaterial(Color.Lerp(Ice3, SnowWhite, (float)rng.NextDouble() * 0.6f));
-                // Only icebergs that actually reach the road count as obstacles.
                 if (Mathf.Abs(x) - r < MammothRoute.RoadHalfWidth) go.AddComponent<MammothObstacle>().radius = r;
                 placedIcebergs.Add(new Vector3(x, z, r));
                 made++;
             }
+            Debug.Log("[Mammoth] Icebergs placed: " + made);
 
             var pink = new Color(0.98f, 0.82f, 0.86f);
             for (int k = 0; k < 8; k++)
@@ -392,7 +405,7 @@ namespace Mammoth.EditorTools
                 float z = 40f + (float)rng.NextDouble() * 440f;
                 float x = side * (4.8f + (float)rng.NextDouble() * 2f);
                 float sc = Mathf.Lerp(0.5f, 1.1f, (float)rng.NextDouble());
-                if (!KeepsPathClear(x, z, sc)) continue;
+                if (!KeepsAcornsClear(x, z, sc)) continue;
                 var go = new GameObject("Accent Crystal");
                 go.transform.SetParent(group.transform);
                 go.transform.position = new Vector3(x, GroundY(x, z) + 0.6f, z);
