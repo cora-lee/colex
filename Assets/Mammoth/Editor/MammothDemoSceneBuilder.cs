@@ -329,10 +329,12 @@ namespace Mammoth.EditorTools
                             ball.transform.localScale = Vector3.one * ballScale;
                             var fmf = ball.AddComponent<MeshFilter>();
                             var fmr = ball.AddComponent<MeshRenderer>();
-                            // subdivisions: 0 (not 1) and a bigger jitter so the canopy
-                            // reads as a chunky low-poly cluster of flat facets, like the
-                            // mountains/icebergs, instead of a smooth near-sphere.
-                            fmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(seed * 7 + b * 5 + 3, jitter: 0.22f, subdivisions: 0);
+                            // subdivisions: 0 was wrong — an octahedron has only 8 faces,
+                            // so it reads as a sharp pointed diamond/cone, not a canopy.
+                            // subdivisions: 2 gives enough faces for the silhouette to
+                            // read as round (like the mammoth's own body), while the
+                            // facets stay visible at this jitter — round AND low-poly.
+                            fmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(seed * 7 + b * 5 + 3, jitter: 0.16f, subdivisions: 2);
                             fmr.sharedMaterial = MakeMaterial(foliage);
                             y += ballScale * 0.75f;
                         }
