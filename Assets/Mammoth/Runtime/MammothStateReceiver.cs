@@ -12,10 +12,11 @@ namespace Mammoth
     {
         [InspectorName("Poll an external lab (Python)")] Poll,
         [InspectorName("Listen for a browser page to push /state")] Listen,
+        [InspectorName("In-Unity camera (no browser, no HTTP)")] InUnityCamera,
     }
 
     /// <summary>
-    /// Feeds the shared MammothEventTracker from one of two sources:
+    /// Feeds the shared MammothEventTracker from one of three sources:
     ///
     /// Poll (integration option B): polls an external process's /state endpoint
     /// (the Python lab) over HTTP GET.
@@ -23,6 +24,12 @@ namespace Mammoth
     /// Listen: Unity itself hosts the /state endpoint. A browser page running the
     /// camera and the v3 gesture mapping in JavaScript (Web/) POSTs each state as
     /// JSON to this endpoint instead of Unity polling anything. Loopback only.
+    ///
+    /// InUnityCamera: no browser, no HTTP at all. A MammothPoseEngine on the same
+    /// GameObject reads the Mac's webcam directly via WebCamTexture and runs
+    /// YOLOv8n-pose through Unity Inference Engine; a MammothGestureMapping (a C#
+    /// port of Web/mammoth-mapping.js) turns the per-frame zone observations into
+    /// a MammothState, which is pushed straight into Tracker in Update().
     /// </summary>
     public class MammothStateReceiver : MonoBehaviour
     {
@@ -37,6 +44,12 @@ namespace Mammoth
         [Header("Listen mode")]
         [Tooltip("Port Unity listens on for the browser page's POST /state. Loopback only.")]
         public int listenPort = 8765;
+
+        [Header("In-Unity camera mode")]
+        [Tooltip("Assign the MammothPoseEngine component (usually on this same GameObject).")]
+        public MammothPoseEngine poseEngine;
+
+        MammothGestureMapping mapping;
 
         [Header("Common")]
         [Tooltip("Abort a request / treat tracking as lost after this many seconds without a fresh state.")]
@@ -80,7 +93,8 @@ namespace Mammoth
             Tracker.RequireTeamMode = requireTeamMode;
 
             if (mode == MammothSourceMode.Poll) StartCoroutine(PollLoop());
-            else StartListening();
+            else if (mode == MammothSourceMode.Listen) StartListening();
+            else StartInUnityCamera();
         }
 
         void OnDisable()
@@ -95,6 +109,7 @@ namespace Mammoth
 
         void Update()
         {
+            if (mode == MammothSourceMode.InUnityCamera) { UpdateInUnityCamera(); return; }
             if (mode != MammothSourceMode.Listen) return;
             Tracker.ReceiveTimeout = receiveTimeout;
             Tracker.RequireTeamMode = requireTeamMode;
@@ -125,6 +140,50 @@ namespace Mammoth
                 Tracker.Push(s, Time.unscaledTimeAsDouble);
                 Status = Tracker.LastRejectReason == "" ? "ok" : Tracker.LastRejectReason;
             }
+        }
+
+        // ---------------- In-Unity camera mode ----------------
+
+        void StartInUnityCamera()
+        {
+            Tracker.ReceiveTimeout = receiveTimeout;
+            Tracker.RequireTeamMode = requireTeamMode;
+
+            if (poseEngine == null) poseEngine = GetComponent<MammothPoseEngine>();
+            if (poseEngine == null)
+            {
+                Status = "no MammothPoseEngine assigned";
+                Debug.LogError("[Mammoth] InUnityCamera mode needs a MammothPoseEngine component.");
+                return;
+            }
+            if (!poseEngine.enabled) poseEngine.enabled = true;
+
+            var cfg = MammothSettingsAsset.Load(false);
+            mapping = new MammothGestureMapping(cfg);
+            Status = poseEngine.Status;
+        }
+
+        void UpdateInUnityCamera()
+        {
+            Tracker.ReceiveTimeout = receiveTimeout;
+            Tracker.RequireTeamMode = requireTeamMode;
+
+            if (poseEngine == null || mapping == null)
+            {
+                Status = "no MammothPoseEngine assigned";
+                return;
+            }
+
+            var cfg = MammothSettingsAsset.Load(false);
+            if (!poseEngine.TryObserve(cfg, out var zones))
+            {
+                Status = poseEngine.Status;
+                return;
+            }
+
+            var state = mapping.Update(zones, Time.unscaledTimeAsDouble);
+            Tracker.Push(state, Time.unscaledTimeAsDouble);
+            Status = poseEngine.CameraReady ? (Tracker.LastRejectReason == "" ? "ok" : Tracker.LastRejectReason) : poseEngine.Status;
         }
 
         void LogJump() { if (logEvents) Debug.Log("[Mammoth] jump"); }

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Mammoth.Art;
+using Unity.InferenceEngine;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -80,6 +81,12 @@ namespace Mammoth.EditorTools
             // Systems
             var systems = new GameObject("Mammoth Systems");
             var receiver = systems.AddComponent<MammothStateReceiver>();
+            var poseEngine = systems.AddComponent<MammothPoseEngine>();
+            poseEngine.modelAsset = AssetDatabase.LoadAssetAtPath<ModelAsset>("Assets/Mammoth/Models/yolov8n-pose.onnx");
+            if (poseEngine.modelAsset == null)
+                Debug.LogError("[Mammoth] yolov8n-pose.onnx not found at Assets/Mammoth/Models/ - in-Unity camera mode will not run.");
+            receiver.poseEngine = poseEngine;
+            receiver.mode = MammothSourceMode.InUnityCamera;
             var controller = mammoth.AddComponent<MammothController>();
             controller.receiver = receiver;
             controller.grabOrigin = grabPoint;
