@@ -17,19 +17,37 @@ namespace Mammoth
     {
         public MammothStateReceiver receiver;
         public bool show = true;
-        [Tooltip("Size in pixels of the preview box in the corner.")]
-        public Vector2 size = new Vector2(220, 165);
-        [Tooltip("Margin from the screen edges, in pixels.")]
-        public float margin = 16f;
+
+        [Tooltip("Width of the preview box as a fraction of the screen width, so it " +
+            "scales with the window instead of staying a fixed pixel size that can " +
+            "overflow or shrink to nothing on a different resolution or aspect ratio.")]
+        [Range(0.08f, 0.35f)]
+        public float widthFraction = 0.18f;
+
+        [Tooltip("Margin from the screen edges, as a fraction of screen height.")]
+        [Range(0.005f, 0.05f)]
+        public float marginFraction = 0.02f;
+
+        // Matches the browser's downscaled thumbnail (220x165), so the box keeps
+        // the feed's real proportions instead of stretching it to a different shape.
+        const float AspectRatio = 220f / 165f;
 
         Texture2D texture;
         int lastVersion = -1;
-        GUIStyle frameStyle;
+        Texture2D borderTex;
 
         void Start()
         {
             if (receiver == null) receiver = FindFirstObjectByType<MammothStateReceiver>();
             texture = new Texture2D(2, 2, TextureFormat.RGB24, false);
+
+            // A single flat-color texture for a thin border, drawn behind the
+            // camera texture. Avoids GUI.Box: Unity's default skin renders its
+            // own dark panel fill, which on top of an also-dark camera frame
+            // reads as two stacked black boxes instead of one framed preview.
+            borderTex = new Texture2D(1, 1);
+            borderTex.SetPixel(0, 0, new Color(1f, 1f, 1f, 0.85f));
+            borderTex.Apply();
         }
 
         void Update()
@@ -48,15 +66,19 @@ namespace Mammoth
         void OnGUI()
         {
             if (!show || texture == null || lastVersion < 0) return;
-            if (frameStyle == null) frameStyle = new GUIStyle(GUI.skin.box);
 
-            float x = Screen.width - size.x - margin;
-            float y = Screen.height - size.y - margin;
+            float w = Screen.width * widthFraction;
+            float h = w / AspectRatio;
+            float margin = Screen.height * marginFraction;
 
-            GUI.Box(new Rect(x - 4, y - 4, size.x + 8, size.y + 8), GUIContent.none, frameStyle);
+            float x = Screen.width - w - margin;
+            float y = Screen.height - h - margin;
+
+            const float border = 2f;
+            GUI.DrawTexture(new Rect(x - border, y - border, w + border * 2f, h + border * 2f), borderTex);
             // The browser already mirrors the feed for the player standing in
             // front of the camera, so draw it exactly as received.
-            GUI.DrawTexture(new Rect(x, y, size.x, size.y), texture, ScaleMode.ScaleToFit);
+            GUI.DrawTexture(new Rect(x, y, w, h), texture, ScaleMode.ScaleToFit);
         }
     }
 }
