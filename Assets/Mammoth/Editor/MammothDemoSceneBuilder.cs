@@ -299,7 +299,7 @@ namespace Mammoth.EditorTools
                     float ballScale = Mathf.Lerp(0.55f, 0.32f, b / (float)(balls - 1 == 0 ? 1 : balls - 1));
                     var ball = new GameObject("Foliage");
                     ball.transform.SetParent(tree.transform, false);
-                    ball.transform.position = new Vector3(0, y, 0);
+                    ball.transform.localPosition = new Vector3(0, y, 0);
                     ball.transform.localScale = Vector3.one * ballScale;
                     var fmf = ball.AddComponent<MeshFilter>();
                     var fmr = ball.AddComponent<MeshRenderer>();
