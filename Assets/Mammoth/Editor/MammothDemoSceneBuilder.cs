@@ -24,11 +24,11 @@ namespace Mammoth.EditorTools
 
         static readonly Color SkyHorizon = new Color(0.80f, 0.89f, 0.98f);
         static readonly Color SkyTop = new Color(0.60f, 0.76f, 0.96f);
-        static readonly Color SnowGround = new Color(0.80f, 0.86f, 0.95f);
+        static readonly Color SnowGround = new Color(0.70f, 0.77f, 0.89f);
         static readonly Color GrassGround = new Color(0.70f, 0.86f, 0.72f);
         static readonly Color RoadSnow = new Color(0.60f, 0.74f, 0.92f);
         static readonly Color RoadEarth = new Color(0.86f, 0.74f, 0.58f);
-        static readonly Color SnowWhite = new Color(0.97f, 0.98f, 1f);
+        static readonly Color SnowWhite = new Color(0.88f, 0.91f, 0.97f);
         static readonly Color IceSlick = new Color(0.80f, 0.97f, 1f);
         static readonly Color MudColor = new Color(0.42f, 0.32f, 0.22f);
         static readonly Color Ice2 = new Color(0.50f, 0.70f, 0.90f);
@@ -46,7 +46,7 @@ namespace Mammoth.EditorTools
         static readonly Color MountainPastel1 = new Color(0.82f, 0.66f, 0.74f);
         static readonly Color MountainPastel2 = new Color(0.86f, 0.74f, 0.70f);
         static readonly Color MountainPastel3 = new Color(0.74f, 0.72f, 0.88f);
-        static readonly Color SnowCream = new Color(0.99f, 0.96f, 0.92f);
+        static readonly Color SnowCream = new Color(0.92f, 0.90f, 0.92f);
         static readonly Color CloudWhite = new Color(0.99f, 0.99f, 1f);
         static readonly Color TrunkPale = new Color(0.95f, 0.92f, 0.90f);
         static readonly Color Wood = new Color(0.62f, 0.44f, 0.30f);
@@ -820,7 +820,7 @@ namespace Mammoth.EditorTools
             RenderSettings.fogStartDistance = 30f;
             RenderSettings.fogEndDistance = 150f;
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = Color.Lerp(SkyTop, SnowWhite, 0.3f);
+            RenderSettings.ambientLight = new Color(0.50f, 0.56f, 0.70f);
         }
 
         static void SetupLighting()
@@ -832,11 +832,11 @@ namespace Mammoth.EditorTools
                 sun.AddComponent<Light>().type = LightType.Directional;
             }
             var light = sun.GetComponent<Light>();
-            light.color = new Color(1f, 0.96f, 0.9f);
-            light.intensity = 0.75f;
+            light.color = new Color(1f, 0.94f, 0.86f);
+            light.intensity = 0.9f;
             light.shadows = LightShadows.Soft;
-            light.shadowStrength = 0.45f;
-            sun.transform.rotation = Quaternion.Euler(46f, -30f, 0f);
+            light.shadowStrength = 0.6f;
+            sun.transform.rotation = Quaternion.Euler(38f, -35f, 0f);
         }
 
         static GameObject BuildMammoth(out Transform squirrel, out Transform trunkPivot)

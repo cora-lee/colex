@@ -45,6 +45,7 @@ namespace Mammoth
         bool tutLowSpeed, tutHighSpeed, tutLeft, tutRight;
         int tutJumpBase;
         float tutorialDoneAt = -1f;
+        float tutorialStepAt;
         GameObject practiceAcorn;
         float practiceRespawnAt = -1f;
         int practiceSpawnCount;
@@ -61,6 +62,7 @@ namespace Mammoth
         // ---- styling ----
         Font font;
         Texture2D roundTex, circleTex, whiteTex;
+        GUIStyle pillStyle;
         GUIStyle panelStyle, labelStyle, titleStyle, bigStyle, buttonStyle, smallStyle, centerStyle;
         float uiScale = 1f;
         Vector2 view;
@@ -186,6 +188,7 @@ namespace Mammoth
             tutorialStep = 0;
             tutLowSpeed = tutHighSpeed = tutLeft = tutRight = false;
             tutorialDoneAt = -1f;
+            tutorialStepAt = Time.unscaledTime;
             if (controller != null) { controller.ResetRun(); controller.Recenter(); }
             SetControl(true, false, true, true, hold: true);
             SetCamera(MammothCameraMode.Follow);
@@ -305,6 +308,9 @@ namespace Mammoth
         void UpdateTutorial()
         {
             if (controller == null) return;
+            // Let the controller settle first, so a reading left over from the
+            // previous screen can't tick a target before anyone moves.
+            if (Time.unscaledTime - tutorialStepAt < 0.5f && tutorialStep < 4) return;
             switch (tutorialStep)
             {
                 case 0:
@@ -337,6 +343,7 @@ namespace Mammoth
         void NextTutorialStep()
         {
             tutorialStep++;
+            tutorialStepAt = Time.unscaledTime;
             AddToast("Nice!", Mint, 1.4f);
             if (controller == null) return;
             if (tutorialStep == 1) SetControl(true, true, true, true, hold: true);
@@ -443,6 +450,7 @@ namespace Mammoth
             whiteTex = Texture2D.whiteTexture;
 
             panelStyle = new GUIStyle { normal = { background = roundTex }, border = new RectOffset(24, 24, 24, 24) };
+            pillStyle = new GUIStyle { normal = { background = MakeRounded(14, 7) }, border = new RectOffset(7, 7, 7, 7) };
             labelStyle = new GUIStyle { font = font, fontSize = 20, wordWrap = true, richText = true, normal = { textColor = Ink } };
             smallStyle = new GUIStyle(labelStyle) { fontSize = 16, normal = { textColor = InkSoft } };
             titleStyle = new GUIStyle(labelStyle) { fontSize = 46, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
@@ -489,6 +497,24 @@ namespace Mammoth
             }
             GUI.color = c;
             GUI.Box(r, GUIContent.none, panelStyle);
+            GUI.color = old;
+        }
+
+        /// <summary>Pill-shaped fill (9-sliced, so the ends stay round at any
+        /// length) in the current GUI.color.</summary>
+        void Pill(Rect r) => GUI.Box(r, GUIContent.none, pillStyle);
+
+        /// <summary>Round slider knob with a white ring, centered on t (0..1) of the bar.</summary>
+        void Knob(Rect bar, float t)
+        {
+            var old = GUI.color;
+            float cx = bar.x + bar.width * Mathf.Clamp01(t), cy = bar.y + bar.height * 0.5f;
+            GUI.color = new Color(0.3f, 0.2f, 0.35f, 0.18f);
+            GUI.DrawTexture(new Rect(cx - 13f, cy - 11f, 26f, 26f), circleTex);
+            GUI.color = Color.white;
+            GUI.DrawTexture(new Rect(cx - 13f, cy - 13f, 26f, 26f), circleTex);
+            GUI.color = Acorn;
+            GUI.DrawTexture(new Rect(cx - 9f, cy - 9f, 18f, 18f), circleTex);
             GUI.color = old;
         }
 
@@ -577,7 +603,7 @@ namespace Mammoth
                 GUI.color = new Color(1f, 1f, 1f, 0.6f);
                 if (i > 0) GUI.DrawTexture(new Rect(zr.x - 1f, zr.y, 2f, zr.height), whiteTex);
                 GUI.color = ok ? new Color(0.45f, 0.9f, 0.6f, 0.9f) : new Color(1f, 0.55f, 0.55f, 0.8f);
-                GUI.DrawTexture(new Rect(zr.x + 2f, zr.yMax - 22f, zr.width - 4f, 20f), roundTex);
+                Pill(new Rect(zr.x + 2f, zr.yMax - 22f, zr.width - 4f, 20f));
                 GUI.color = old;
                 Label(new Rect(zr.x, zr.yMax - 22f, zr.width, 20f), tag[i], centerStyle.WithSize(12).Bold(), Ink);
             }
@@ -781,6 +807,14 @@ namespace Mammoth
             if (tutorialStep == 1) DrawSteerMeter(new Rect(CenterX(520f), 214f, 520f, 74f), true);
 
             if (Button(new Rect(view.x - 190f, view.y - 76f, 160f, 50f), "Home", Lilac)) EnterHome();
+            if (Button(new Rect(view.x - 400f, view.y - 76f, 196f, 50f), "Skip tutorial", Acorn))
+            {
+                DestroyPracticeAcorn();
+                tutorialDoneThisSession = true;
+                EnterReady();
+                return;
+            }
+            if (Button(new Rect(view.x - 570f, view.y - 76f, 156f, 50f), "Skip step", Sky)) NextTutorialStep();
         }
 
         void DrawSpeedGauge(Rect r, bool targets)
@@ -788,17 +822,16 @@ namespace Mammoth
             Panel(r, Cream);
             var bar = new Rect(r.x + 24f, r.y + 40f, r.width - 48f, 16f);
             var old = GUI.color;
-            GUI.color = new Color(0.88f, 0.86f, 0.9f); GUI.DrawTexture(bar, roundTex);
+            GUI.color = new Color(0.88f, 0.86f, 0.9f); Pill(bar);
             if (targets)
             {
                 GUI.color = tutLowSpeed ? Mint : new Color(Rose.r, Rose.g, Rose.b, 0.6f);
-                GUI.DrawTexture(new Rect(bar.x, bar.y, bar.width * 0.25f, bar.height), roundTex);
+                Pill(new Rect(bar.x, bar.y, bar.width * 0.25f, bar.height));
                 GUI.color = tutHighSpeed ? Mint : new Color(Rose.r, Rose.g, Rose.b, 0.6f);
-                GUI.DrawTexture(new Rect(bar.x + bar.width * 0.75f, bar.y, bar.width * 0.25f, bar.height), roundTex);
+                Pill(new Rect(bar.x + bar.width * 0.75f, bar.y, bar.width * 0.25f, bar.height));
             }
             float t = controller != null ? controller.Throttle : 0f;
-            GUI.color = Acorn;
-            GUI.DrawTexture(new Rect(bar.x + bar.width * t - 11f, bar.y - 5f, 22f, 26f), roundTex);
+            Knob(bar, t);
             GUI.color = old;
             Label(new Rect(r.x + 24f, r.y + 8f, 200f, 26f), "Speed", labelStyle.WithSize(16).Bold());
             if (targets) Label(new Rect(r.x + 24f, r.y + 8f, r.width - 48f, 26f), (tutLowSpeed ? "slow: done   " : "slow   ") + (tutHighSpeed ? "fast: done" : "fast"), smallStyle.Right());
@@ -809,17 +842,16 @@ namespace Mammoth
             Panel(r, Cream);
             var bar = new Rect(r.x + 24f, r.y + 40f, r.width - 48f, 16f);
             var old = GUI.color;
-            GUI.color = new Color(0.88f, 0.86f, 0.9f); GUI.DrawTexture(bar, roundTex);
+            GUI.color = new Color(0.88f, 0.86f, 0.9f); Pill(bar);
             if (targets)
             {
                 GUI.color = tutLeft ? Mint : new Color(Sky.r, Sky.g, Sky.b, 0.6f);
-                GUI.DrawTexture(new Rect(bar.x, bar.y, bar.width * 0.15f, bar.height), roundTex);
+                Pill(new Rect(bar.x, bar.y, bar.width * 0.15f, bar.height));
                 GUI.color = tutRight ? Mint : new Color(Sky.r, Sky.g, Sky.b, 0.6f);
-                GUI.DrawTexture(new Rect(bar.x + bar.width * 0.85f, bar.y, bar.width * 0.15f, bar.height), roundTex);
+                Pill(new Rect(bar.x + bar.width * 0.85f, bar.y, bar.width * 0.15f, bar.height));
             }
             float lat = controller != null ? Mathf.InverseLerp(-MammothRoute.SteerLimit, MammothRoute.SteerLimit, controller.Lateral) : 0.5f;
-            GUI.color = Acorn;
-            GUI.DrawTexture(new Rect(bar.x + bar.width * lat - 11f, bar.y - 5f, 22f, 26f), roundTex);
+            Knob(bar, lat);
             GUI.color = old;
             Label(new Rect(r.x + 24f, r.y + 8f, 200f, 26f), "Tilt", labelStyle.WithSize(16).Bold());
             if (targets) Label(new Rect(r.x + 24f, r.y + 8f, r.width - 48f, 26f), (tutLeft ? "left: done   " : "left   ") + (tutRight ? "right: done" : "right"), smallStyle.Right());
@@ -898,13 +930,12 @@ namespace Mammoth
             MammothRoute.SuggestedSpeed(z, out float lo, out float hi);
             var bar = new Rect(left.x + 22f, left.y + 62f, 256f, 14f);
             var old = GUI.color;
-            GUI.color = new Color(0.88f, 0.86f, 0.9f); GUI.DrawTexture(bar, roundTex);
+            GUI.color = new Color(0.88f, 0.86f, 0.9f); Pill(bar);
             var cfgMax = 12f;
             GUI.color = new Color(Mint.r, Mint.g, Mint.b, 0.75f);
-            GUI.DrawTexture(new Rect(bar.x + bar.width * (lo / cfgMax), bar.y, bar.width * ((hi - lo) / cfgMax), bar.height), roundTex);
+            Pill(new Rect(bar.x + bar.width * (lo / cfgMax), bar.y, bar.width * ((hi - lo) / cfgMax), bar.height));
             float sp = controller.ActualSpeed;
-            GUI.color = Acorn;
-            GUI.DrawTexture(new Rect(bar.x + bar.width * Mathf.Clamp01(sp / cfgMax) - 9f, bar.y - 5f, 18f, 24f), roundTex);
+            Knob(bar, Mathf.Clamp01(sp / cfgMax));
             GUI.color = old;
             Label(new Rect(left.x + 22f, left.y + 84f, 260f, 24f), "speed " + sp.ToString("0.0") + "   suggested " + lo.ToString("0") + "-" + hi.ToString("0"), smallStyle);
 
