@@ -300,7 +300,7 @@ namespace Mammoth.EditorTools
                     {
                         float x = clusterX + ((float)rng.NextDouble() - 0.5f) * 2.2f;
                         float zPos = clusterZ + ((float)rng.NextDouble() - 0.5f) * 2.2f;
-                        float scale = Mathf.Lerp(0.55f, 1.05f, (float)rng.NextDouble());
+                        float scale = Mathf.Lerp(1.05f, 1.85f, (float)rng.NextDouble());
                         int seed = seedBase++;
 
                         var tree = new GameObject("Tree");
@@ -329,7 +329,10 @@ namespace Mammoth.EditorTools
                             ball.transform.localScale = Vector3.one * ballScale;
                             var fmf = ball.AddComponent<MeshFilter>();
                             var fmr = ball.AddComponent<MeshRenderer>();
-                            fmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(seed * 7 + b * 5 + 3, jitter: 0.1f, subdivisions: 1);
+                            // subdivisions: 0 (not 1) and a bigger jitter so the canopy
+                            // reads as a chunky low-poly cluster of flat facets, like the
+                            // mountains/icebergs, instead of a smooth near-sphere.
+                            fmf.sharedMesh = LowPolyMeshUtil.BuildIceChunk(seed * 7 + b * 5 + 3, jitter: 0.22f, subdivisions: 0);
                             fmr.sharedMaterial = MakeMaterial(foliage);
                             y += ballScale * 0.75f;
                         }
