@@ -160,6 +160,7 @@ namespace Mammoth
                 travelSpeed = travelSpeed,
                 leftHand = b.HasValue ? b.Value.leftHeight : 0f,
                 rightHand = b.HasValue ? b.Value.rightHeight : 0f,
+                tilt = b.HasValue ? b.Value.tilt : 0f,
                 directionReady = directionReady,
                 lane = lane,
                 jumpTracked = jumpTrackedField,

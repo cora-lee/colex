@@ -83,8 +83,8 @@ namespace Mammoth
             int dir = 0;
             if (dirVisible)
             {
-                float diff = s.rightHand - s.leftHand;
-                if (Mathf.Abs(diff) > 0.5f) dir = diff > 0 ? 1 : -1;
+                float lean = -s.tilt;
+                if (Mathf.Abs(lean) > 0.15f) dir = lean > 0 ? 1 : -1;
             }
             if (dir != 0 && dir != lastSteerDir) Flash(1, dir < 0 ? "Left!" : "Right!", Sky);
             lastSteerDir = dir;
@@ -769,11 +769,9 @@ namespace Mammoth
                 for (int b = 0; b < Bones.Length; b += 2)
                     if (kpConfBuf[Bones[b]] > 0.3f && kpConfBuf[Bones[b + 1]] > 0.3f)
                         Seg(image, kpBuf[Bones[b]], kpBuf[Bones[b + 1]], thickness);
-                // neck: shoulder midpoint up to the nose
-                if (kpConfBuf[0] > 0.3f && kpConfBuf[5] > 0.3f && kpConfBuf[6] > 0.3f)
-                    Seg(image, (kpBuf[5] + kpBuf[6]) * 0.5f, kpBuf[0], thickness);
-                for (int k = 0; k < 17; k++)
-                    if (kpConfBuf[k] > 0.3f && k != 1 && k != 2 && k != 3 && k != 4)
+                // body only: no face points
+                for (int k = 5; k < 17; k++)
+                    if (kpConfBuf[k] > 0.3f)
                         Seg(image, kpBuf[k] + new Vector2(-0.004f, 0f), kpBuf[k] + new Vector2(0.004f, 0f), thickness * 1.9f);
             }
             GL.End();
@@ -877,7 +875,7 @@ namespace Mammoth
             string[] where = { "Left player", "Center player", "Right player" };
             string[] how = {
                 "Raise both hands to go faster, lower them to slow down.",
-                "Tilt: raise one hand higher than the other to steer that way.",
+                "Lean: tilt your shoulders to steer. Lean more to turn more.",
                 "Raise both hands to jump. Clap to swing the trunk.",
             };
             Color[] cols = { Rose, Sky, Mint };
@@ -1145,7 +1143,7 @@ namespace Mammoth
             string[] body =
             {
                 "Raise both hands to speed up, lower them to slow down. Even the lowest input still moves.",
-                "Raise one hand higher than the other to tilt and steer. Level hands keep the line.",
+                "Tilt your shoulders to steer: a small lean turns a little, a big lean turns more. Stand straight to go straight.",
                 "Clap near the acorn to collect it. Every second acorn is high: jump first, then clap in the air.",
             };
             float w = 640f;

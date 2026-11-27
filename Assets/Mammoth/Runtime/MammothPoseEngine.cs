@@ -30,6 +30,10 @@ namespace Mammoth
         public float leftHeight, rightHeight;
         public bool handsValid, jumpValid, clapValid;
         public float handDistance;
+        /// <summary>Shoulder tilt: (screen-left shoulder y - screen-right
+        /// shoulder y) / shoulder width. Positive = leaning to the screen left.</summary>
+        public float tilt;
+        public bool shouldersValid;
     }
 
     /// <summary>
@@ -66,6 +70,7 @@ namespace Mammoth
         Worker worker;
         Tensor<float> inputTensor;
         readonly List<PoseDetection> detections = new List<PoseDetection>();
+        readonly ZoneObservation?[] lastZones = new ZoneObservation?[3];
 
         public bool CameraReady => webCam != null && webCam.width > 16;
 
@@ -160,11 +165,15 @@ namespace Mammoth
         {
             zones = new ZoneObservation?[3];
             if (webCam == null || !webCam.isPlaying || webCam.width <= 16 || worker == null) return false;
-            if (!webCam.didUpdateThisFrame) return true; // no new frame yet; keep last answer blank-but-ready
+            // The game runs faster than the camera: between camera frames, repeat
+            // the last answer instead of reporting nobody (that made the regions
+            // flicker to "No one" every other frame).
+            if (!webCam.didUpdateThisFrame) { System.Array.Copy(lastZones, zones, 3); return true; }
 
             Status = "ok";
             RunInference();
             BuildZones(cfg, zones);
+            System.Array.Copy(zones, lastZones, 3);
             return true;
         }
 
@@ -294,9 +303,15 @@ namespace Mammoth
                     handDistance = hands
                         ? Vector2.Distance(new Vector2(d.kpX[KpLWrist], d.kpY[KpLWrist]), new Vector2(d.kpX[KpRWrist], d.kpY[KpRWrist])) / width
                         : 0,
+                    tilt = (d.kpY[ls] - d.kpY[rs]) / width,
+                    shouldersValid = true,
                 };
 
-                bool validForZone = zone == 0 ? Good(d, new[] { KpNose, KpLWrist, KpRWrist }, cfg.confidence) : hands;
+                // Direction is steered by leaning the shoulders, so it only needs
+                // the shoulders in view; the other roles still need both hands.
+                bool validForZone = zone == 0 ? Good(d, new[] { KpNose, KpLWrist, KpRWrist }, cfg.confidence)
+                                  : zone == 1 ? true
+                                  : hands;
                 lists[zone].Add(validForZone ? value : (ZoneObservation?)null);
             }
 

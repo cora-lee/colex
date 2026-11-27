@@ -58,6 +58,10 @@ namespace Mammoth
         [Header("Steering (tilt)")]
         [Tooltip("Hand-height difference below this is treated as level (no sideways motion).")]
         public float steerDeadzone = 0.2f;
+        [Tooltip("Shoulder lean (height difference / shoulder width) ignored as noise.")]
+        public float tiltDeadzone = 0.05f;
+        [Tooltip("Shoulder lean that gives full steering.")]
+        public float tiltFull = 0.35f;
         [Tooltip("Hand-height difference that gives full sideways speed.")]
         public float steerFull = 1.1f;
         [Tooltip("Sideways speed at full tilt, Unity units per second.")]
@@ -293,11 +297,12 @@ namespace Mammoth
             throttle = s != null ? Mathf.Clamp01(s.speed) : 0f;
             if (s != null && s.visible != null && s.visible.Length > 1 && s.visible[1])
             {
-                // Screen-region left/right as the mapping reports it (no extra mirroring).
-                float diff = s.rightHand - s.leftHand;
-                float dz = CurrentTerrain == MammothTerrainType.Ice ? steerDeadzone * 0.5f : steerDeadzone; // ice reacts to the slightest tilt
-                float mag = Mathf.InverseLerp(dz, steerFull, Mathf.Abs(diff));
-                steer = Mathf.Sign(diff) * mag * mag * (3f - 2f * mag);
+                // Lean the shoulders: a little lean steers a little, a big lean
+                // steers hard. Positive tilt = leaning toward the screen left.
+                float lean = -s.tilt;
+                float dz = CurrentTerrain == MammothTerrainType.Ice ? tiltDeadzone * 0.5f : tiltDeadzone; // ice reacts to the slightest lean
+                float mag = Mathf.InverseLerp(dz, tiltFull, Mathf.Abs(lean));
+                steer = Mathf.Sign(lean) * mag;
             }
 
             // Keyboard fills in for any role nobody is standing in (solo or

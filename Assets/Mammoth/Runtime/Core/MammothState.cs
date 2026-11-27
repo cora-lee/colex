@@ -27,6 +27,7 @@ namespace Mammoth
 
         public float leftHand;
         public float rightHand;
+        public float tilt;         // shoulder lean, + = toward the screen left
         public bool directionReady;
 
         public bool jumpTracked;
