@@ -343,8 +343,9 @@ namespace Mammoth.EditorTools
             }
             MeshPart(sq, "Tail", Tube("Squirrel Tail", new[]
             {
-                new Vector3(0f, 0.05f, -0.1f), new Vector3(0f, 0.12f, -0.28f), new Vector3(0f, 0.34f, -0.37f),
-                new Vector3(0f, 0.58f, -0.31f), new Vector3(0f, 0.72f, -0.16f), new Vector3(0f, 0.74f, -0.04f),
+                // sweeps back and off to one side so the squirrel's arms show from behind
+                new Vector3(0f, 0.05f, -0.1f), new Vector3(0.05f, 0.1f, -0.26f), new Vector3(0.14f, 0.24f, -0.36f),
+                new Vector3(0.22f, 0.4f, -0.34f), new Vector3(0.26f, 0.5f, -0.22f), new Vector3(0.24f, 0.52f, -0.12f),
             }, new[] { 0.045f, 0.1f, 0.14f, 0.13f, 0.08f, 0.02f }, 6), Vector3.zero, Vector3.one, SquirrelTail);
             rider.bag = Poly(sq, "Food Bag", new Vector3(0.17f, 0.1f, -0.06f), new Vector3(0.15f, 0.18f, 0.15f), BagColor, null, 1).transform;
             squirrel = sq.transform;

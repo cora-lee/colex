@@ -10,6 +10,7 @@ namespace Mammoth.EditorTools
     public static class MammothUIPreview
     {
         [MenuItem("Mammoth/Preview UI/1 Home")] static void A() => Show(MammothFlowState.Home);
+        [MenuItem("Mammoth/Preview UI/1b Intro demo")] static void A2() => Show(MammothFlowState.Intro);
         [MenuItem("Mammoth/Preview UI/2 Rules")] static void B() => Show(MammothFlowState.Rules);
         [MenuItem("Mammoth/Preview UI/3 Practice select")] static void C() => Show(MammothFlowState.PracticeSelect);
         [MenuItem("Mammoth/Preview UI/4 Camera setup")] static void D() => Show(MammothFlowState.Setup);

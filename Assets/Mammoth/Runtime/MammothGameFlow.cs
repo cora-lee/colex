@@ -5,7 +5,7 @@ namespace Mammoth
 {
     public enum MammothFlowState
     {
-        Home, Rules, PracticeSelect, Setup, Tutorial, Practice, Ready, Countdown, Playing, Paused, Ending, Results
+        Home, Rules, PracticeSelect, Setup, Tutorial, Practice, Ready, Countdown, Playing, Paused, Ending, Results, Intro
     }
 
     public enum MammothPracticeRole { Speed, Direction, JumpGrab }
@@ -194,6 +194,110 @@ namespace Mammoth
             SetControl(false, false, false);
             SetCamera(MammothCameraMode.Showcase);
             if (followCamera != null) followCamera.Snap();
+        }
+
+        // ---------------- Intro demo ----------------
+        // A short self-playing scene before the rules: the squirrel yanks the
+        // left lock and the mammoth swerves left, then right, then jumps, with
+        // a caption for each beat, so everyone sees how the team steers.
+        float introStart;
+        MammothRider introRider;
+        static readonly (float t, string title, string sub, int dir)[] IntroBeats =
+        {
+            (0f,   "Meet your ride",          "The squirrel steers the mammoth by its hair.", 0),
+            (1.6f, "Pull left",               "Lean left and the mammoth goes left.",         -1),
+            (3.9f, "Pull right",              "Lean right and the mammoth goes right.",       1),
+            (6.2f, "Jump together",           "Raise both hands to jump. Clap to grab acorns.", 2),
+            (8.4f, "Let's go over the mountain", "Here is how the team plays.",              0),
+        };
+        const float IntroLength = 10f;
+
+        void EnterIntro()
+        {
+            State = MammothFlowState.Intro;
+            introStart = Time.unscaledTime;
+            introJumped = false;
+            if (controller != null) { controller.ResetRun(); controller.Recenter(); }
+            SetControl(true, true, false);
+            SetCamera(MammothCameraMode.Follow);
+            if (followCamera != null) followCamera.Snap();
+            if (introRider == null) introRider = FindFirstObjectByType<MammothRider>();
+            if (introRider != null) introRider.drama = 1.9f;
+            // Hold the camera on the road centre so the swerve is plain to see.
+            if (followCamera != null) followCamera.lateralFollow = 0f;
+        }
+
+        bool introJumped;
+
+        void UpdateIntro()
+        {
+            float t = Time.unscaledTime - introStart;
+            float steer = 0f;
+            if (t > 1.8f && t < 3.6f) steer = -1f;
+            else if (t > 3.6f && t < 4.1f) steer = 0f;
+            else if (t > 4.1f && t < 6.1f) steer = 1f;
+            // keep the demo on the road: drift back to centre before the jump
+            if (t > 6.1f && controller != null) steer = Mathf.Clamp(-controller.Lateral * 0.6f, -0.6f, 0.6f);
+            if (controller != null)
+            {
+                // ease in and out so the swerve reads as a deliberate yank
+                controller.demoSteer = Mathf.MoveTowards(float.IsNaN(controller.demoSteer) ? 0f : controller.demoSteer, steer, Time.unscaledDeltaTime * 4f);
+                if (t > 6.6f && !introJumped) { introJumped = true; controller.DemoJump(); }
+            }
+            if (t >= IntroLength) ExitIntro();
+        }
+
+        void ExitIntro()
+        {
+            if (controller != null) { controller.demoSteer = float.NaN; controller.ResetRun(); }
+            if (introRider != null) introRider.drama = 1f;
+            if (followCamera != null) followCamera.lateralFollow = 0.6f;
+            SetControl(false, false, false);
+            SetCamera(MammothCameraMode.Showcase);
+            if (followCamera != null) followCamera.Snap();
+            EnterRules(true);
+        }
+
+        void DrawIntro()
+        {
+            float t = Time.unscaledTime - introStart;
+            int beat = 0;
+            for (int i = 0; i < IntroBeats.Length; i++) if (t >= IntroBeats[i].t) beat = i;
+            var b = IntroBeats[beat];
+            float since = t - b.t;
+            float a = Mathf.Clamp01(since / 0.3f);
+            float pop = Mathf.LerpUnclamped(0.85f, 1f, EaseOutBack(Mathf.Clamp01(since / 0.35f)));
+
+            // letterbox bars for a film-like feel
+            var old = GUI.color;
+            GUI.color = new Color(0.12f, 0.1f, 0.16f, 0.85f);
+            GUI.DrawTexture(new Rect(0f, 0f, view.x, 54f), whiteTex);
+            GUI.DrawTexture(new Rect(0f, view.y - 54f, view.x, 54f), whiteTex);
+            GUI.color = old;
+
+            // caption card
+            float w = 620f * pop, h = 112f * pop;
+            var card = new Rect(view.x * 0.5f - w * 0.5f, view.y - 54f - h - 26f, w, h);
+            Panel(card, new Color(Cream.r, Cream.g, Cream.b, 0.96f * a));
+            Label(new Rect(card.x, card.y + 14f * pop, w, 46f * pop), b.title, titleStyle.WithSize(Mathf.RoundToInt(34 * pop)), new Color(Acorn.r, Acorn.g, Acorn.b, a));
+            Label(new Rect(card.x, card.y + 62f * pop, w, 30f * pop), b.sub, centerStyle.WithSize(Mathf.RoundToInt(19 * pop)), new Color(InkSoft.r, InkSoft.g, InkSoft.b, a));
+
+            // big arrow on the side being pulled
+            if (b.dir == -1 || b.dir == 1)
+            {
+                float pulse = 1f + Mathf.Sin(Time.unscaledTime * 8f) * 0.08f;
+                float size = 120f * pulse;
+                float cx = view.x * 0.5f + b.dir * 300f;
+                var r = new Rect(cx - size * 0.5f, view.y * 0.42f - size * 0.5f, size, size);
+                BigBadge(r.center, size, Sky, b.dir < 0 ? "<" : ">", 0.5f, a);
+            }
+            else if (b.dir == 2)
+            {
+                float size = 120f;
+                BigBadge(new Vector2(view.x * 0.5f, view.y * 0.3f), size, Mint, "^", 0.5f, a);
+            }
+
+            if (Button(new Rect(view.x - 150f, 8f, 128f, 38f), "Skip", Lilac)) ExitIntro();
         }
 
         void EnterRules(bool leadToSetup)
@@ -390,6 +494,7 @@ namespace Mammoth
             switch (s)
             {
                 case MammothFlowState.Home: EnterHome(); break;
+                case MammothFlowState.Intro: UseKeyboard(true); EnterIntro(); break;
                 case MammothFlowState.Rules: EnterRules(true); break;
                 case MammothFlowState.PracticeSelect: State = MammothFlowState.PracticeSelect; break;
                 case MammothFlowState.Setup: UseKeyboard(false); EnterSetup(false); break;
@@ -431,6 +536,7 @@ namespace Mammoth
                 case MammothFlowState.Practice: UpdatePractice(); break;
                 case MammothFlowState.Countdown: UpdateCountdown(); break;
                 case MammothFlowState.Playing: UpdatePlaying(); break;
+                case MammothFlowState.Intro: UpdateIntro(); break;
                 case MammothFlowState.Paused: UpdatePaused(); break;
                 case MammothFlowState.Ending:
                     if (Time.unscaledTime - endingStart > 8.5f) State = MammothFlowState.Results;
@@ -692,6 +798,7 @@ namespace Mammoth
             switch (State)
             {
                 case MammothFlowState.Home: DrawHome(); break;
+                case MammothFlowState.Intro: DrawIntro(); break;
                 case MammothFlowState.Rules: DrawRules(); break;
                 case MammothFlowState.PracticeSelect: DrawPracticeSelect(); break;
                 case MammothFlowState.Setup: DrawSetup(); break;
@@ -858,7 +965,7 @@ namespace Mammoth
             Label(new Rect(card.x + 20f, card.y + 34f, w - 40f, 120f), "The Last Bag\nof Acorns", titleStyle, Acorn);
             Label(new Rect(card.x + 30f, card.y + 160f, w - 60f, 60f), "Over the mountain together.", centerStyle, InkSoft);
             float bx = card.x + 50f, bw = w - 100f;
-            if (Button(new Rect(bx, card.y + 240f, bw, 58f), "Start team adventure", Acorn)) EnterRules(true);
+            if (Button(new Rect(bx, card.y + 240f, bw, 58f), "Start team adventure", Acorn)) EnterIntro();
             if (Button(new Rect(bx, card.y + 312f, bw, 52f), "Practice controls", Mint)) State = MammothFlowState.PracticeSelect;
             if (Button(new Rect(bx, card.y + 378f, bw, 52f), "How to play", Sky)) EnterRules(false);
         }

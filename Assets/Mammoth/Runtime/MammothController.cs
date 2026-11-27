@@ -275,8 +275,28 @@ namespace Mammoth
             return MammothTerrainType.Normal;
         }
 
+        /// <summary>Intro demo only: forces steering (-1..1). NaN = normal input.</summary>
+        [NonSerialized] public float demoSteer = float.NaN;
+        [NonSerialized] public float demoSpeed = 3f;
+
+        /// <summary>Intro demo only: jump without a player.</summary>
+        public void DemoJump()
+        {
+            if (cfg == null || motion.Airborne(clock, cfg)) return;
+            motion.StartJump(clock);
+            jumpEndsAt = clock + cfg.jump_duration;
+            OnJumped?.Invoke();
+        }
+
         void ReadInput(out float speed, out float steer, out float throttle)
         {
+            if (!float.IsNaN(demoSteer))
+            {
+                speed = demoSpeed;
+                throttle = 0.3f;
+                steer = demoSteer;
+                return;
+            }
             if (useKeyboard)
             {
                 float target = MammothKeys.Held(KeyCode.W) ? cfg.max_speed

@@ -27,6 +27,8 @@ namespace Mammoth
         public float armWidth = 0.09f;
         public float lockWidth = 0.1f;
         public float headYaw = 17f;
+        [Tooltip("Exaggerates the hair pulling and head turn (the intro demo uses more).")]
+        [System.NonSerialized] public float drama = 1f;
         public float headRoll = 9f;
 
         [Header("Body")]
@@ -143,7 +145,7 @@ namespace Mammoth
             steer = Mathf.Lerp(steer, target, 1f - Mathf.Exp(-12f * dt));
 
             if (head != null)
-                head.localRotation = headBase * Quaternion.Euler(0f, steer * headYaw, -steer * headRoll);
+                head.localRotation = headBase * Quaternion.Euler(0f, steer * headYaw * drama, -steer * headRoll * drama);
 
             // little tugs while a lock is being pulled, so it reads as yanking
             float tug = Mathf.Sin(Time.time * 16f) * 0.5f + 0.5f;
@@ -153,6 +155,7 @@ namespace Mammoth
                 float pull = Mathf.Clamp01(steer * side);
                 float slack = Mathf.Clamp01(-steer * side);
                 float t = Mathf.Clamp01(pull * (0.86f + 0.14f * tug));
+                if (drama > 1f) t = pull * (0.9f + 0.1f * drama + 0.18f * tug); // yank past the normal reach
                 Vector3 local = Vector3.LerpUnclamped(restHand, pullHand, t);
                 local.z += slack * 0.05f;      // the other paw gives slack
                 local.y -= slack * 0.03f;
