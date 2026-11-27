@@ -232,8 +232,10 @@ namespace Mammoth.EditorTools
                 Slice(-0.62f, 1.40f, 0.84f, 0.96f),
                 Slice(-0.05f, 1.54f, 0.86f, 1.04f),
                 Slice(0.42f, 1.70f, 0.84f, 1.14f),
-                Slice(0.80f, 1.72f, 0.68f, 0.98f),
-                Slice(1.02f, 1.72f, 0.40f, 0.62f),
+                // chest stays full and runs on into the head (no pinched neck)
+                Slice(0.84f, 1.76f, 0.80f, 1.08f),
+                Slice(1.16f, 1.86f, 0.66f, 0.9f),
+                Slice(1.4f, 1.96f, 0.4f, 0.56f),
             }, 8, 2.7f), Vector3.zero, Vector3.one, HideGrey);
             rider.body = body.transform;
 
@@ -276,6 +278,15 @@ namespace Mammoth.EditorTools
             // Head turns with the squirrel's pull.
             var head = Pivot(rig, "Head Pivot", new Vector3(0f, 2.0f, 1.0f));
             rider.head = head.transform;
+            // Woolly collar behind the face: covers the joint so the head grows
+            // out of the shoulders, and turns with the head.
+            MeshPart(head, "Collar", Loft("Mammoth Collar", new[]
+            {
+                new Ring(new Vector3(0f, 0.05f, -0.34f), Vector3.right * 0.66f, Vector3.up * 0.78f),
+                new Ring(new Vector3(0f, 0.08f, -0.02f), Vector3.right * 0.66f, Vector3.up * 0.8f),
+                new Ring(new Vector3(0f, 0.1f, 0.26f), Vector3.right * 0.56f, Vector3.up * 0.66f),
+                new Ring(new Vector3(0f, 0.1f, 0.4f), Vector3.right * 0.34f, Vector3.up * 0.4f),
+            }, 8), Vector3.zero, Vector3.one, HideGrey);
             MeshPart(head, "Dome", Loft("Mammoth Dome", new[]
             {
                 Layer(0.80f, 0.12f, 0.20f, 0.20f),

@@ -103,7 +103,8 @@ namespace Mammoth
 
         // ---- styling ----
         Font font;
-        Texture2D roundTex, circleTex, whiteTex, bigCircleTex;
+        Texture2D roundTex, circleTex, whiteTex, bigCircleTex, badgeTex;
+        GUIStyle badgeStyle;
         float goStart = -10f;
         GUIStyle pillStyle;
         GUIStyle panelStyle, labelStyle, titleStyle, bigStyle, buttonStyle, smallStyle, centerStyle;
@@ -581,6 +582,8 @@ namespace Mammoth
             if (panelStyle != null) return;
             font = PickFont();
             roundTex = MakeRounded(64, 22);
+            badgeTex = MakeRounded(32, 10);
+            badgeStyle = new GUIStyle { normal = { background = badgeTex }, border = new RectOffset(11, 11, 11, 11) };
             circleTex = MakeRounded(64, 32);
             bigCircleTex = MakeRounded(256, 128, true);
             whiteTex = Texture2D.whiteTexture;
@@ -820,11 +823,16 @@ namespace Mammoth
                 }
                 if (big)
                 {
-                    var badge = new Rect(zr.x + 8f, zr.y + 8f, Mathf.Min(zw - 16f, 150f), 46f);
-                    GUI.color = PlayerBlue; GUI.DrawTexture(badge, roundTex);
+                    // Card-style badge sized to its text, small even corners (9-sliced).
+                    var roleStyle = labelStyle.WithSize(16).Bold();
+                    roleStyle.wordWrap = false;
+                    float bw = Mathf.Min(zw - 16f, roleStyle.CalcSize(new GUIContent(roles[i])).x + 24f);
+                    var badge = new Rect(zr.x + 8f, zr.y + 8f, bw, 44f);
+                    GUI.color = PlayerBlue; GUI.Box(badge, GUIContent.none, badgeStyle);
                     GUI.color = old;
-                    Label(new Rect(badge.x + 10f, badge.y + 4f, badge.width - 12f, 16f), "PLAYER 0" + (i + 1), labelStyle.WithSize(11).Bold(), new Color(1f, 1f, 1f, 0.85f));
-                    Label(new Rect(badge.x + 10f, badge.y + 19f, badge.width - 12f, 24f), roles[i], labelStyle.WithSize(17).Bold(), Color.white);
+                    var smallCaps = labelStyle.WithSize(10).Bold(); smallCaps.wordWrap = false;
+                    Label(new Rect(badge.x + 12f, badge.y + 5f, bw - 16f, 14f), "PLAYER 0" + (i + 1), smallCaps, new Color(1f, 1f, 1f, 0.8f));
+                    Label(new Rect(badge.x + 12f, badge.y + 18f, bw - 16f, 22f), roles[i], roleStyle, Color.white);
                 }
                 else
                 {
