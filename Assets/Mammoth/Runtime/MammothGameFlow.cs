@@ -35,6 +35,11 @@ namespace Mammoth
 
         // ---- session ----
         bool keyboardMode;
+        // Browser camera: Chrome runs the camera + gesture mapping (Web/index.html)
+        // and posts state to Unity. Used when macOS won't give Unity the camera.
+        bool browserMode;
+        Texture2D browserTex;
+        int browserFrameVersion = -1;
         bool tutorialDoneThisSession;
         bool rulesLeadToSetup;
         bool setupForPractice;
@@ -158,7 +163,41 @@ namespace Mammoth
         {
             if (receiver == null) return;
             if (controller != null) controller.useKeyboard = false;
+            var want = browserMode ? MammothSourceMode.Listen : MammothSourceMode.InUnityCamera;
+            if (receiver.mode != want)
+            {
+                receiver.enabled = false;
+                receiver.mode = want;
+            }
+            if (browserMode && poseEngine != null && poseEngine.enabled) poseEngine.enabled = false;
             if (!receiver.enabled) receiver.enabled = true;
+        }
+
+        /// <summary>Switch to Chrome's camera: start the local page server (in the
+        /// Editor) and open the camera page; Unity listens for its state.</summary>
+        void UseBrowserCamera()
+        {
+            browserMode = true;
+            keyboardMode = false;
+            StartCamera();
+#if UNITY_EDITOR
+            var server = System.Type.GetType("Mammoth.MammothWebServer, Assembly-CSharp-Editor");
+            server?.GetMethod("Start")?.Invoke(null, null);
+#endif
+            Application.OpenURL("http://localhost:8080/Web/index.html");
+        }
+
+        bool CameraImage(out Texture tex, out Rect uv)
+        {
+            if (browserMode)
+            {
+                tex = browserTex; uv = new Rect(0f, 0f, 1f, 1f); // page already sends a mirrored image
+                return browserTex != null && browserFrameVersion >= 0;
+            }
+            tex = poseEngine != null ? poseEngine.CameraTexture : null;
+            bool vflip = poseEngine != null && poseEngine.CameraVerticallyMirrored;
+            uv = vflip ? new Rect(1f, 1f, -1f, -1f) : new Rect(1f, 0f, -1f, 1f);
+            return tex != null && poseEngine.CameraReady;
         }
 
         void StopCamera()
@@ -286,6 +325,15 @@ namespace Mammoth
         void Update()
         {
             if (MammothKeys.Down(KeyCode.F1) && debugHud != null) debugHud.show = !debugHud.show;
+            if (browserMode && receiver != null && receiver.FrameVersion != browserFrameVersion)
+            {
+                var bytes = receiver.LatestFrameJpeg;
+                if (bytes != null && bytes.Length > 0)
+                {
+                    if (browserTex == null) browserTex = new Texture2D(2, 2, TextureFormat.RGB24, false);
+                    if (browserTex.LoadImage(bytes, false)) browserFrameVersion = receiver.FrameVersion;
+                }
+            }
             if (cameraPreview != null)
                 cameraPreview.show = false; // the setup screen draws its own live preview
 
@@ -582,16 +630,14 @@ namespace Mammoth
             var box = new Rect(20f, view.y - h - 20f, w, h);
             Panel(box, new Color(0.2f, 0.18f, 0.25f, 0.92f));
             var inner = new Rect(box.x + 6f, box.y + 6f, w - 12f, h - 12f);
-            bool camReady = poseEngine != null && poseEngine.CameraReady && poseEngine.CameraTexture != null;
-            if (!camReady)
+            if (!CameraImage(out var camTex, out var camUv))
             {
-                string st = poseEngine != null ? poseEngine.Status : "camera off";
+                string st = browserMode ? "Waiting for the Chrome camera page..." : (poseEngine != null ? poseEngine.Status : "camera off");
                 if (st.Contains("denied")) st = "Camera permission is off for Unity.";
                 Label(inner, st, centerStyle.WithSize(14), new Color(1f, 1f, 1f, 0.85f));
                 return;
             }
-            bool vflip = poseEngine.CameraVerticallyMirrored;
-            GUI.DrawTextureWithTexCoords(inner, poseEngine.CameraTexture, vflip ? new Rect(1f, 1f, -1f, -1f) : new Rect(1f, 0f, -1f, 1f));
+            GUI.DrawTextureWithTexCoords(inner, camTex, camUv);
             var s = receiver != null ? receiver.State : null;
             string[] tag = { "Speed", "Direction", "Jump" };
             float zw = inner.width / 3f;
@@ -709,14 +755,12 @@ namespace Mammoth
 
             var preview = new Rect(card.x + 40f, card.y + 80f, 520f, 390f);
             Panel(preview, new Color(0.2f, 0.18f, 0.25f, 1f), false);
-            var tex = poseEngine != null ? poseEngine.CameraTexture : null;
-            bool camReady = poseEngine != null && poseEngine.CameraReady;
-            if (tex != null && camReady)
+            bool camReady = CameraImage(out var tex, out var texUv);
+            if (camReady)
             {
                 var inner = new Rect(preview.x + 8f, preview.y + 8f, preview.width - 16f, preview.height - 16f);
-                bool vflip = poseEngine.CameraVerticallyMirrored;
                 // Mirrored preview: left on screen is the player's left region.
-                GUI.DrawTextureWithTexCoords(inner, tex, vflip ? new Rect(1f, 1f, -1f, -1f) : new Rect(1f, 0f, -1f, 1f));
+                GUI.DrawTextureWithTexCoords(inner, tex, texUv);
             }
             else
                 Label(new Rect(preview.x, preview.y + preview.height * 0.5f - 40f, preview.width, 50f), "No camera image yet", centerStyle.WithSize(20).Bold(), new Color(1f, 1f, 1f, 0.75f));
@@ -742,12 +786,17 @@ namespace Mammoth
             Color statusColor = InkSoft;
             bool calibrated = receiver != null && receiver.ControlAllowed;
             string camStatus = poseEngine != null ? poseEngine.Status : "no pose engine";
-            if (!camReady)
+            if (browserMode && !calibrated && (receiver == null || !receiver.Connected))
+            {
+                status = "<b>Using Chrome's camera.</b>\nOn the page that just opened, press Start camera and allow access. Keep that tab open.";
+                statusColor = Ink;
+            }
+            else if (!camReady && !browserMode)
             {
                 status = camStatus;
                 if (camStatus.Contains("denied"))
                 {
-                    status = "Camera permission is off for Unity.\nTurn it on in System Settings > Privacy & Security > Camera, then press Play again.";
+                    status = "macOS is not giving Unity the camera.\nUse Chrome's camera instead: it already has permission.";
                     statusColor = Warn;
                 }
             }
@@ -767,7 +816,9 @@ namespace Mammoth
 
             if (Button(new Rect(card.x + w - 260f, card.y + h - 76f, 220f, 52f), "Continue", Acorn, calibrated)) AfterSetup();
             if (Button(new Rect(card.x + 40f, card.y + h - 76f, 150f, 52f), "Back", Lilac)) EnterHome();
-            if (Button(new Rect(card.x + 210f, card.y + h - 76f, 250f, 52f), "Keyboard test mode", Sky)) UseKeyboard(true);
+            if (Button(new Rect(card.x + 210f, card.y + h - 76f, 230f, 52f), "Keyboard test mode", Sky)) UseKeyboard(true);
+            if (!browserMode && Button(new Rect(sx, card.y + 300f, sw, 54f), "Use Chrome camera", Mint)) UseBrowserCamera();
+            else if (browserMode && Button(new Rect(sx, card.y + 300f, sw, 54f), "Open camera page again", Mint)) UseBrowserCamera();
         }
 
         // ---------------- Tutorial ----------------
