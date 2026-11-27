@@ -928,7 +928,7 @@ namespace Mammoth.EditorTools
             nut.transform.localPosition = new Vector3(0, -0.5f, 0);
             nut.transform.localScale = new Vector3(0.74f, 0.55f, 0.74f);
             nut.AddComponent<MeshFilter>().sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 31 + 9, jitter: 0.14f, subdivisions: 1);
-            nut.AddComponent<MeshRenderer>().sharedMaterial = MakeMaterial(air ? AcornNutAir : AcornNutGround);
+            nut.AddComponent<MeshRenderer>().sharedMaterial = MakeMaterial(AcornNutGround);
 
             // Round beret-style cap, wider than the nut so it overlaps the rim.
             var cap = new GameObject("Acorn Cap");
@@ -936,12 +936,12 @@ namespace Mammoth.EditorTools
             cap.transform.localPosition = new Vector3(0, 0.15f, 0);
             cap.transform.localScale = new Vector3(0.88f, 0.35f, 0.88f);
             cap.AddComponent<MeshFilter>().sharedMesh = LowPolyMeshUtil.BuildIceChunk(i * 31 + 20, jitter: 0.1f, subdivisions: 1);
-            cap.AddComponent<MeshRenderer>().sharedMaterial = MakeMaterial(air ? AcornCapAir : AcornCapGround);
+            cap.AddComponent<MeshRenderer>().sharedMaterial = MakeMaterial(AcornCapGround);
 
             // Small angled stem on top.
             var stem = Part(r.gameObject, PrimitiveType.Cylinder, "Acorn Stem",
                 new Vector3(0.09f, 0.44f, 0f), new Vector3(0.045f, 0.12f, 0.045f),
-                air ? AcornCapAir : AcornCapGround, flat: true);
+                AcornCapGround, flat: true);
             stem.transform.localRotation = Quaternion.Euler(0f, 0f, 28f);
             return r;
         }

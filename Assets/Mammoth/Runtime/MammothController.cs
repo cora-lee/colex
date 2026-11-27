@@ -47,6 +47,13 @@ namespace Mammoth
         public float iceSlideAmplitude = 0.55f;
         [Tooltip("How fast the ice slide sways.")]
         public float iceSlideFrequency = 1.7f;
+        [Tooltip("On ice, how quickly sideways speed follows the tilt (low = slides on, hard to stop).")]
+        public float iceSteerResponse = 0.7f;
+        [Tooltip("On ice, a small tilt is amplified this much (and the slide is faster).")]
+        public float iceSteerGain = 2.6f;
+        public float iceSlideSpeed = 7.5f;
+        [Tooltip("On ice, extra sideways push that keeps nudging the mammoth back and forth.")]
+        public float iceSlidePush = 3.2f;
 
         [Header("Steering (tilt)")]
         [Tooltip("Hand-height difference below this is treated as level (no sideways motion).")]
@@ -192,12 +199,27 @@ namespace Mammoth
             Throttle = throttle;
             Steer = steerIn;
 
-            float targetVel = allowSteer ? steerIn * steerSpeed : 0f;
-            lateralVel += (targetVel - lateralVel) * (1f - Mathf.Exp(-steerResponse * dt));
-            if (!clockRunning) lateralVel = 0f;
-            lateral = Mathf.Clamp(lateral + lateralVel * dt * worldScale, -MammothRoute.SteerLimit, MammothRoute.SteerLimit);
-
             CurrentTerrain = SampleTerrain(distance);
+            bool onIce = CurrentTerrain == MammothTerrainType.Ice && clockRunning && !holdPosition;
+
+            // On ice the mammoth keeps its sideways momentum (slow to respond,
+            // slow to stop) and gets nudged back and forth, so it really slides.
+            float targetVel = allowSteer ? steerIn * steerSpeed : 0f;
+            if (onIce && allowSteer)
+            {
+                // A small tilt becomes a big slide; level hands don't stop it
+                // (target follows the current drift, so momentum carries on).
+                float amp = Mathf.Clamp(steerIn * iceSteerGain, -1f, 1f);
+                targetVel = Mathf.Abs(steerIn) > 0.02f ? amp * iceSlideSpeed : lateralVel * 0.97f;
+            }
+            float resp = onIce ? iceSteerResponse * (Mathf.Abs(steerIn) > 0.02f ? 2.2f : 1f) : steerResponse;
+            lateralVel += (targetVel - lateralVel) * (1f - Mathf.Exp(-resp * dt));
+            if (onIce) lateralVel += Mathf.Sin((float)clock * iceSlideFrequency + distance * 0.07f) * iceSlidePush * dt;
+            if (!clockRunning) lateralVel = 0f;
+            float nextLateral = lateral + lateralVel * dt * worldScale;
+            if (Mathf.Abs(nextLateral) > MammothRoute.SteerLimit) lateralVel *= -0.25f; // soft bounce off the road edge
+            lateral = Mathf.Clamp(nextLateral, -MammothRoute.SteerLimit, MammothRoute.SteerLimit);
+
             float driftTarget = CurrentTerrain == MammothTerrainType.Ice && clockRunning && !holdPosition
                 ? Mathf.Sin((float)clock * iceSlideFrequency + distance * 0.05f) * iceSlideAmplitude : 0f;
             iceDrift += (driftTarget - iceDrift) * (1f - Mathf.Exp(-4f * dt));
@@ -247,7 +269,8 @@ namespace Mammoth
             {
                 // Screen-region left/right as the mapping reports it (no extra mirroring).
                 float diff = s.rightHand - s.leftHand;
-                float mag = Mathf.InverseLerp(steerDeadzone, steerFull, Mathf.Abs(diff));
+                float dz = CurrentTerrain == MammothTerrainType.Ice ? steerDeadzone * 0.5f : steerDeadzone; // ice reacts to the slightest tilt
+                float mag = Mathf.InverseLerp(dz, steerFull, Mathf.Abs(diff));
                 steer = Mathf.Sign(diff) * mag * mag * (3f - 2f * mag);
             }
 
@@ -379,7 +402,15 @@ namespace Mammoth
 
             float pitch = -Mathf.Atan(MammothRoute.Slope(distance)) * Mathf.Rad2Deg;
             float yaw = Mathf.Clamp(lateralVel * 5f, -22f, 22f);
-            transform.rotation = Quaternion.Euler(pitch, yaw, 0f);
+            float roll = 0f;
+            if (CurrentTerrain == MammothTerrainType.Ice && clockRunning && !holdPosition)
+            {
+                // Wobbly footing: body twists and tips while it slides.
+                float w = (float)clock * iceSlideFrequency * 1.6f;
+                yaw += Mathf.Sin(w) * 9f + lateralVel * 3f;
+                roll = Mathf.Sin(w * 1.3f + 1f) * 6f - lateralVel * 2.5f;
+            }
+            transform.rotation = Quaternion.Euler(pitch, yaw, roll);
 
             if (squirrel != null)
             {

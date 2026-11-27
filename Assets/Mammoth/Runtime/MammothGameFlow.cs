@@ -103,7 +103,8 @@ namespace Mammoth
 
         // ---- styling ----
         Font font;
-        Texture2D roundTex, circleTex, whiteTex;
+        Texture2D roundTex, circleTex, whiteTex, bigCircleTex;
+        float goStart = -10f;
         GUIStyle pillStyle;
         GUIStyle panelStyle, labelStyle, titleStyle, bigStyle, buttonStyle, smallStyle, centerStyle;
         float uiScale = 1f;
@@ -353,6 +354,7 @@ namespace Mammoth
         void EnterPlaying()
         {
             State = MammothFlowState.Playing;
+            goStart = Time.unscaledTime;
             SetControl(true, true, true);
         }
 
@@ -578,6 +580,7 @@ namespace Mammoth
             font = PickFont();
             roundTex = MakeRounded(64, 22);
             circleTex = MakeRounded(64, 32);
+            bigCircleTex = MakeRounded(256, 128, true);
             whiteTex = Texture2D.whiteTexture;
 
             panelStyle = new GUIStyle { normal = { background = roundTex }, border = new RectOffset(24, 24, 24, 24) };
@@ -600,9 +603,9 @@ namespace Mammoth
             return Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         }
 
-        static Texture2D MakeRounded(int size, int radius)
+        static Texture2D MakeRounded(int size, int radius, bool mips = false)
         {
-            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, mips) { wrapMode = TextureWrapMode.Clamp, filterMode = mips ? FilterMode.Trilinear : FilterMode.Bilinear };
             var px = new Color[size * size];
             for (int y = 0; y < size; y++)
                 for (int x = 0; x < size; x++)
@@ -691,7 +694,7 @@ namespace Mammoth
                 case MammothFlowState.Practice: DrawPractice(); break;
                 case MammothFlowState.Ready: DrawReady(); break;
                 case MammothFlowState.Countdown: DrawPlayHud(); DrawCountdown(); break;
-                case MammothFlowState.Playing: DrawPlayHud(); break;
+                case MammothFlowState.Playing: DrawPlayHud(); DrawGo(); break;
                 case MammothFlowState.Paused: DrawPlayHud(); DrawPaused(); break;
                 case MammothFlowState.Ending: DrawEnding(); break;
                 case MammothFlowState.Results: DrawResults(); break;
@@ -1066,17 +1069,73 @@ namespace Mammoth
             if (Button(new Rect(view.x - 190f, view.y - 76f, 160f, 50f), "Home", Lilac)) EnterHome();
         }
 
+        static float EaseOutBack(float t)
+        {
+            t = Mathf.Clamp01(t) - 1f;
+            const float c = 1.9f;
+            return 1f + (c + 1f) * t * t * t + c * t * t;
+        }
+
+        /// <summary>Big round badge: soft shadow, white ring, colored disc, label.</summary>
+        void BigBadge(Vector2 center, float size, Color fill, string text, int fontSize, float alpha)
+        {
+            var old = GUI.color;
+            var r = new Rect(center.x - size * 0.5f, center.y - size * 0.5f, size, size);
+            GUI.color = new Color(0.25f, 0.18f, 0.32f, 0.22f * alpha);
+            GUI.DrawTexture(new Rect(r.x + 4f, r.y + 12f, r.width, r.height), bigCircleTex);
+            GUI.color = new Color(1f, 1f, 1f, alpha);
+            GUI.DrawTexture(r, bigCircleTex);
+            float ring = size * 0.07f;
+            GUI.color = new Color(fill.r, fill.g, fill.b, alpha);
+            GUI.DrawTexture(new Rect(r.x + ring, r.y + ring, r.width - ring * 2f, r.height - ring * 2f), bigCircleTex);
+            // soft top highlight
+            GUI.color = new Color(1f, 1f, 1f, 0.18f * alpha);
+            GUI.DrawTexture(new Rect(r.x + size * 0.22f, r.y + size * 0.14f, size * 0.56f, size * 0.3f), bigCircleTex);
+            GUI.color = old;
+            var shadowStyle = bigStyle.WithSize(fontSize);
+            // Optical centering: the font sits low in its line box, and a "1"
+            // carries its weight on the left, so nudge the text to look centered.
+            var tr = new Rect(r.x + (text == "1" ? fontSize * 0.05f : 0f), r.y - fontSize * 0.09f, r.width, r.height);
+            Label(new Rect(tr.x, tr.y + 4f, tr.width, tr.height), text, shadowStyle, new Color(0.3f, 0.2f, 0.3f, 0.25f * alpha));
+            Label(tr, text, shadowStyle, new Color(1f, 1f, 1f, alpha));
+        }
+
         void DrawCountdown()
         {
-            int n = 3 - Mathf.FloorToInt(Time.unscaledTime - countdownStart);
-            if (n < 1) n = 1;
-            float frac = (Time.unscaledTime - countdownStart) % 1f;
-            float size = Mathf.Lerp(230f, 190f, frac);
-            var r = new Rect(view.x * 0.5f - size * 0.5f, view.y * 0.45f - size * 0.5f, size, size);
-            Circle(new Rect(r.x, r.y + 8f, r.width, r.height), new Color(0.3f, 0.2f, 0.35f, 0.18f));
-            Circle(r, new Color(Acorn.r, Acorn.g, Acorn.b, 0.95f));
-            Label(r, n.ToString(), bigStyle);
-            if (countdownIsResume) Label(new Rect(0f, r.yMax + 16f, view.x, 30f), "Resuming...", centerStyle.WithSize(20).Bold(), Color.white);
+            float t = Time.unscaledTime - countdownStart;
+            int n = Mathf.Clamp(3 - Mathf.FloorToInt(t), 1, 3);
+            float local = t - Mathf.Floor(t);
+            Color[] fills = { Mint, Butter, Rose }; // 1, 2, 3
+            float size = 210f * Mathf.LerpUnclamped(0.55f, 1f, EaseOutBack(local / 0.35f));
+            float alpha = 1f - Mathf.Clamp01((local - 0.82f) / 0.18f);
+            var c = new Vector2(view.x * 0.5f, view.y * 0.44f);
+
+            // gentle dim so the badge reads over the bright snow
+            var old = GUI.color;
+            GUI.color = new Color(0.2f, 0.16f, 0.3f, 0.12f);
+            GUI.DrawTexture(new Rect(0f, 0f, view.x, view.y), whiteTex);
+            GUI.color = old;
+
+            BigBadge(c, size, fills[n - 1], n.ToString(), 104, alpha);
+
+            // progress dots under the badge
+            for (int i = 0; i < 3; i++)
+            {
+                bool lit = i < 4 - n;
+                Circle(new Rect(c.x - 34f + i * 26f, c.y + 140f, 16f, 16f), lit ? Color.white : new Color(1f, 1f, 1f, 0.4f));
+            }
+            var cap = new Rect(c.x - 110f, c.y + 168f, 220f, 40f);
+            Panel(cap, new Color(1f, 1f, 1f, 0.92f));
+            Label(cap, countdownIsResume ? "Resuming" : "Get ready", centerStyle.WithSize(19).Bold(), Acorn);
+        }
+
+        void DrawGo()
+        {
+            float t = Time.unscaledTime - goStart;
+            if (t > 0.9f) return;
+            float size = 230f * Mathf.LerpUnclamped(0.6f, 1f, EaseOutBack(t / 0.3f));
+            float alpha = 1f - Mathf.Clamp01((t - 0.6f) / 0.3f);
+            BigBadge(new Vector2(view.x * 0.5f, view.y * 0.44f), size, Acorn, "Go!", 88, alpha);
         }
 
         // ---------------- In-game HUD ----------------
@@ -1128,7 +1187,7 @@ namespace Mammoth
                 bool ice = controller.CurrentTerrain == MammothTerrainType.Ice;
                 var tb = new Rect(24f, 150f, 300f, 40f);
                 Panel(tb, ice ? new Color(0.55f, 0.82f, 0.95f, 0.95f) : new Color(0.62f, 0.47f, 0.33f, 0.95f));
-                Label(tb, ice ? "Slick ice: you'll slide a little" : "Mud: slow going", centerStyle.WithSize(17).Bold(), Color.white);
+                Label(tb, ice ? "Slick ice: easy does it, you'll slide!" : "Mud: slow going", centerStyle.WithSize(17).Bold(), Color.white);
             }
 
             // Next necessary prompt
@@ -1234,17 +1293,22 @@ namespace Mammoth
             y += 52f;
         }
 
+        /// <summary>Short feedback ("+10", "Almost...", "Bump!") near the top
+        /// center, just under the route prompt, newest on top.</summary>
         void DrawToasts()
         {
-            float y = view.y * 0.62f;
+            float y = 104f;
             for (int i = toasts.Count - 1; i >= 0; i--)
             {
                 var t = toasts[i];
-                float w = Mathf.Max(160f, t.text.Length * 12f + 60f);
-                var r = new Rect(CenterX(w), y, w, 50f);
-                Panel(r, t.color);
-                Label(r, t.text, centerStyle.WithSize(21).Bold(), Color.white);
-                y -= 60f;
+                float left = t.until - Time.unscaledTime;
+                float a = Mathf.Clamp01(left / 0.25f);
+                float w = Mathf.Max(150f, t.text.Length * 11.5f + 56f);
+                var r = new Rect(CenterX(w), y, w, 44f);
+                var c = t.color; c.a *= a;
+                Panel(r, c);
+                Label(r, t.text, centerStyle.WithSize(19).Bold(), new Color(1f, 1f, 1f, a));
+                y += 52f;
             }
         }
     }
