@@ -66,11 +66,11 @@ namespace Mammoth
         public float steerResponse = 7f;
 
         [Header("Grab (trunk reach box, Unity units)")]
-        public float grabWindow = 0.18f;
-        public float reachForward = 1.7f;
-        public float reachBack = 0.7f;
-        public float reachLateral = 0.95f;
-        public float reachVertical = 0.65f;
+        public float grabWindow = 0.3f;
+        public float reachForward = 2.4f;
+        public float reachBack = 1.0f;
+        public float reachLateral = 1.4f;
+        public float reachVertical = 0.9f;
 
         [Header("Set by MammothGameFlow")]
         public bool moveForward;

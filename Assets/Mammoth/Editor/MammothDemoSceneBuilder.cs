@@ -428,8 +428,12 @@ namespace Mammoth.EditorTools
         {
             foreach (var a in AcornPath)
             {
-                if (z + r < a.z - 9f || z - r > a.z + 2f) continue;
-                if (Mathf.Abs(x - a.x) - r < 1.6f) return false;
+                // High acorns need a clear run-up for the jump, so keep a longer
+                // and wider stretch in front of them free.
+                float ahead = a.high ? 16f : 10f;
+                float margin = a.high ? 2.4f : 1.8f;
+                if (z + r < a.z - ahead || z - r > a.z + 3f) continue;
+                if (Mathf.Abs(x - a.x) - r < margin) return false;
             }
             return true;
         }
@@ -469,7 +473,9 @@ namespace Mammoth.EditorTools
                 if (z > SnowEndZ) scale *= 0.85f; // retreating ice downhill
                 float x = side * (3.8f + (float)rng.NextDouble() * 3.2f);
                 float r = scale * 0.85f;
-                if (!KeepsAcornsClear(x, z, r) || !LeavesGap(x, z, r)) continue;
+                // Clearance uses the iceberg's visible size (the jittered mesh
+                // reaches ~1.3x its scale), not its smaller collision footprint.
+                if (!KeepsAcornsClear(x, z, scale * 1.3f) || !LeavesGap(x, z, r)) continue;
                 bool crowded = false;
                 foreach (var p in placedIcebergs)
                     if (new Vector2(p.x - x, p.y - z).magnitude < (p.z + r) * 0.6f) { crowded = true; break; }
@@ -495,7 +501,7 @@ namespace Mammoth.EditorTools
                 float z = 40f + (float)rng.NextDouble() * 440f;
                 float x = side * (4.8f + (float)rng.NextDouble() * 2f);
                 float sc = Mathf.Lerp(0.5f, 1.1f, (float)rng.NextDouble());
-                if (!KeepsAcornsClear(x, z, sc)) continue;
+                if (!KeepsAcornsClear(x, z, sc * 1.3f)) continue;
                 var go = new GameObject("Accent Crystal");
                 go.transform.SetParent(group.transform);
                 go.transform.position = new Vector3(x, GroundY(x, z) + 0.6f, z);

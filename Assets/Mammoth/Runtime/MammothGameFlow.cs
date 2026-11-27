@@ -693,8 +693,8 @@ namespace Mammoth
                 case MammothFlowState.Tutorial: DrawTutorial(); break;
                 case MammothFlowState.Practice: DrawPractice(); break;
                 case MammothFlowState.Ready: DrawReady(); break;
-                case MammothFlowState.Countdown: DrawPlayHud(); DrawCountdown(); break;
-                case MammothFlowState.Playing: DrawPlayHud(); DrawGo(); break;
+                case MammothFlowState.Countdown: DrawHighAcornTags(); DrawPlayHud(); DrawCountdown(); break;
+                case MammothFlowState.Playing: DrawHighAcornTags(); DrawPlayHud(); DrawGo(); break;
                 case MammothFlowState.Paused: DrawPlayHud(); DrawPaused(); break;
                 case MammothFlowState.Ending: DrawEnding(); break;
                 case MammothFlowState.Results: DrawResults(); break;
@@ -1161,25 +1161,17 @@ namespace Mammoth
             GUI.color = old;
             Label(new Rect(left.x + 22f, left.y + 84f, 260f, 24f), "speed " + sp.ToString("0.0") + "   suggested " + lo.ToString("0") + "-" + hi.ToString("0"), smallStyle);
 
-            // Right card: acorns + shared score + tracking
-            var right = new Rect(view.x - 284f, 22f, 260f, 118f);
+            // Right card: just the acorn count, with an acorn icon, centered.
+            string count = controller.Acorns + " / " + totalAcorns;
+            var countStyle = labelStyle.WithSize(30).Bold();
+            float textW = countStyle.CalcSize(new GUIContent(count)).x;
+            float iconW = 34f, gap = 12f, padX = 24f;
+            float cardW = padX * 2f + iconW + gap + textW;
+            var right = new Rect(view.x - cardW - 24f, 22f, cardW, 70f);
             Panel(right, Cream);
-            Circle(new Rect(right.x + 20f, right.y + 18f, 40f, 40f), Acorn);
-            Label(new Rect(right.x + 72f, right.y + 14f, 180f, 44f), controller.Acorns + " / " + totalAcorns, labelStyle.WithSize(30).Bold());
-            Label(new Rect(right.x + 22f, right.y + 64f, 220f, 26f), "score " + controller.Score, labelStyle.WithSize(18), InkSoft);
-            if (!keyboardMode)
-            {
-                var s = receiver != null ? receiver.State : null;
-                string[] r = { "S", "D", "J" };
-                for (int i = 0; i < 3; i++)
-                {
-                    bool ok = s != null && s.visible != null && s.visible.Length > i && s.visible[i] && receiver.ControlAllowed;
-                    var dr = new Rect(right.x + 150f + i * 32f, right.y + 64f, 26f, 26f);
-                    Circle(dr, ok ? Mint : Warn);
-                    Label(dr, r[i], centerStyle.WithSize(13).Bold(), Color.white);
-                }
-            }
-            else Label(new Rect(right.x + 140f, right.y + 64f, 110f, 26f), "keyboard", smallStyle.Right());
+            float cx = right.x + padX;
+            DrawAcornIcon(new Rect(cx, right.y + (right.height - 40f) * 0.5f, iconW, 40f));
+            Label(new Rect(cx + iconW + gap, right.y, textW + 4f, right.height), count, countStyle.Mid());
 
             // Terrain badge under the left card
             if (controller.CurrentTerrain != MammothTerrainType.Normal)
@@ -1187,7 +1179,7 @@ namespace Mammoth
                 bool ice = controller.CurrentTerrain == MammothTerrainType.Ice;
                 var tb = new Rect(24f, 150f, 300f, 40f);
                 Panel(tb, ice ? new Color(0.55f, 0.82f, 0.95f, 0.95f) : new Color(0.62f, 0.47f, 0.33f, 0.95f));
-                Label(tb, ice ? "Slick ice: easy does it, you'll slide!" : "Mud: slow going", centerStyle.WithSize(17).Bold(), Color.white);
+                Label(tb, ice ? "Slick ice: you'll slide!" : "Mud: slow going", centerStyle.WithSize(17).Bold(), Color.white);
             }
 
             // Next necessary prompt
@@ -1203,6 +1195,46 @@ namespace Mammoth
                     Label(pr, prompt, centerStyle.WithSize(19).Bold(), Color.white);
                 }
                 if (Button(new Rect(view.x - 140f, view.y - 66f, 116f, 44f), "Pause", Lilac)) EnterPause(false);
+            }
+        }
+
+        static readonly Color AcornNutUI = new Color(0.90f, 0.70f, 0.35f);
+        static readonly Color AcornCapUI = new Color(0.46f, 0.30f, 0.16f);
+
+        /// <summary>Small flat acorn: rounded nut, wide cap, little stem.</summary>
+        void DrawAcornIcon(Rect r)
+        {
+            var old = GUI.color;
+            float w = r.width;
+            GUI.color = AcornNutUI;
+            GUI.DrawTexture(new Rect(r.x + w * 0.14f, r.y + r.height * 0.30f, w * 0.72f, r.height * 0.68f), bigCircleTex);
+            GUI.color = AcornCapUI;
+            Pill(new Rect(r.x, r.y + r.height * 0.18f, w, r.height * 0.30f));
+            GUI.DrawTexture(new Rect(r.x + w * 0.46f, r.y, w * 0.1f, r.height * 0.24f), whiteTex);
+            GUI.color = old;
+        }
+
+        /// <summary>"JUMP" tag floating above every high acorn ahead, so players
+        /// know which ones need a jump before the clap.</summary>
+        void DrawHighAcornTags()
+        {
+            var cam = Camera.main;
+            if (cam == null || controller == null) return;
+            foreach (var r in MammothReward.Active)
+            {
+                if (!r.high || r.practice) continue;
+                float dz = r.transform.position.z - controller.Distance;
+                if (dz < -1f || dz > 45f) continue;
+                Vector3 sp = cam.WorldToScreenPoint(r.transform.position + Vector3.up * 0.75f);
+                if (sp.z <= 0f) continue;
+                float gx = sp.x / uiScale, gy = (Screen.height - sp.y) / uiScale;
+                float near = Mathf.InverseLerp(45f, 8f, dz);
+                float sc = Mathf.Lerp(0.6f, 1f, near);
+                float a = Mathf.Clamp01(Mathf.InverseLerp(45f, 35f, dz)) * (dz < 1f ? Mathf.Clamp01(dz + 1f) : 1f);
+                var rect = new Rect(gx - 38f * sc, gy - 30f * sc, 76f * sc, 26f * sc);
+                var c = Sky; c.a = 0.95f * a;
+                Panel(rect, c, false);
+                Label(rect, "JUMP", centerStyle.WithSize(Mathf.RoundToInt(15 * sc)).Bold(), new Color(1f, 1f, 1f, a));
             }
         }
 
@@ -1318,5 +1350,6 @@ namespace Mammoth
         public static GUIStyle WithSize(this GUIStyle s, int size) => new GUIStyle(s) { fontSize = size };
         public static GUIStyle Bold(this GUIStyle s) => new GUIStyle(s) { fontStyle = FontStyle.Bold };
         public static GUIStyle Right(this GUIStyle s) => new GUIStyle(s) { alignment = TextAnchor.MiddleRight };
+        public static GUIStyle Mid(this GUIStyle s) => new GUIStyle(s) { alignment = TextAnchor.MiddleLeft };
     }
 }
