@@ -122,6 +122,8 @@ namespace Mammoth
         public float bodyRadius = 0.55f;
         [Tooltip("A bump makes the mammoth sit down for this long. It costs time, not points.")]
         public float sitSeconds = 1.5f;
+        [Tooltip("Forward speed multiplier while in the air, so a jump carries the mammoth further.")]
+        public float jumpForwardBoost = 1.6f;
         [Tooltip("How far the trunk swings up for a grab, in degrees.")]
         public float trunkRaiseAngle = 110f;
 
@@ -258,6 +260,7 @@ namespace Mammoth
             if (CurrentTerrain == MammothTerrainType.Mud) mult *= mudSpeedFactor;
             if (clock < slowUntil) mult *= collisionSlowFactor;
             if (Sitting) mult = 0f;
+            if (cfg != null && motion.Airborne(clock, cfg)) mult *= jumpForwardBoost;
             ActualSpeed = (moveForward && !holdPosition) ? speedIn * mult : 0f;
             if (moveForward && !holdPosition && clockRunning) RunTime += dt;
             distance += ActualSpeed * worldScale * dt;

@@ -27,7 +27,7 @@ namespace Mammoth
         public float clap_close = 0.35f;
         public float clap_open = 0.9f;
         public float clap_cooldown = 0.35f;
-        public float jump_duration = 0.55f;
+        public float jump_duration = 0.75f;
         public float jump_height = 1.5f;
 
         // Ranges copied from settings.py SCHEMA (minimum, maximum).
