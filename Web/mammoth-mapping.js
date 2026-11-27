@@ -229,34 +229,52 @@ async function start(cfg, mapping) {
 
   let lastSend = 0;
   let lastFrameSend = 0;
-  function frame(tsMs) {
-    const now = performance.now() / 1000;
-    const result = landmarker.detectForVideo(video, tsMs);
+  function frame() {
+    // Always derive the timestamp from performance.now(), never from
+    // video.requestVideoFrameCallback's own meta.mediaTime. MediaPipe requires
+    // strictly increasing timestamps on one consistent clock; mixing the two
+    // (a huge page-uptime value on the very first call, then a small
+    // video-position value on every call after) broke that invariant and
+    // permanently crashed detectForVideo, which is why recognition and the
+    // camera preview could both get stuck showing nothing until the page was
+    // reloaded.
+    const tsMs = performance.now();
+    const now = tsMs / 1000;
 
-    // Mirror x so this matches "mirror image before inference" (video element is
-    // visually mirrored via CSS only; landmarks from the unmirrored frame need
-    // x flipped here to match the same convention signals.py assumes).
-    const posesLandmarks = result.landmarks.map(lm => lm.map(p => ({ ...p, x: 1 - p.x })));
+    try {
+      const result = landmarker.detectForVideo(video, tsMs);
 
-    const obs = observe(posesLandmarks, cfg);
-    const state = mapping.update(obs, now);
-    drawOverlay(result, cfg);
-    updateHud(obs, state, mapping);
+      // Mirror x so this matches "mirror image before inference" (video element is
+      // visually mirrored via CSS only; landmarks from the unmirrored frame need
+      // x flipped here to match the same convention signals.py assumes).
+      const posesLandmarks = result.landmarks.map(lm => lm.map(p => ({ ...p, x: 1 - p.x })));
 
-    if (tsMs - lastSend > 1000 / 30) {
-      lastSend = tsMs;
-      sendToUnity(state);
+      const obs = observe(posesLandmarks, cfg);
+      const state = mapping.update(obs, now);
+      drawOverlay(result, cfg);
+      updateHud(obs, state, mapping);
+
+      if (tsMs - lastSend > 1000 / 30) {
+        lastSend = tsMs;
+        sendToUnity(state);
+      }
+      // Thumbnail for Unity's in-game camera preview goes over separately, at a
+      // much lower rate (5 fps) — it's just for the player to glance at, not for
+      // gesture recognition, so there's no reason to burden /state with it.
+      if (tsMs - lastFrameSend > 1000 / 5) {
+        lastFrameSend = tsMs;
+        sendFrameToUnity();
+      }
+    } catch (e) {
+      // One bad frame (a transient MediaPipe hiccup, a dropped camera frame,
+      // etc.) should never permanently stop recognition the way the timestamp
+      // bug above did — log it and keep going on the next frame.
+      console.warn("[Mammoth] frame skipped:", e);
     }
-    // Thumbnail for Unity's in-game camera preview goes over separately, at a
-    // much lower rate (5 fps) — it's just for the player to glance at, not for
-    // gesture recognition, so there's no reason to burden /state with it.
-    if (tsMs - lastFrameSend > 1000 / 5) {
-      lastFrameSend = tsMs;
-      sendFrameToUnity();
-    }
-    video.requestVideoFrameCallback ? video.requestVideoFrameCallback((_, meta) => frame(meta.mediaTime * 1000)) : requestAnimationFrame(frame);
+
+    video.requestVideoFrameCallback ? video.requestVideoFrameCallback(frame) : requestAnimationFrame(frame);
   }
-  requestAnimationFrame(frame);
+  frame();
 }
 
 function drawOverlay(result, cfg) {
