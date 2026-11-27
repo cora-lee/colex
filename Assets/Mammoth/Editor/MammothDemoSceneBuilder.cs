@@ -246,8 +246,8 @@ namespace Mammoth.EditorTools
                 // Taller-relative-to-base than before (narrower, sharper silhouette),
                 // matching the referenced low-poly mountain art's steep peaks rather
                 // than wide squat domes.
-                BuildMountainRow(field, side, lane * 9f, step: 11f, heightMin: 7f, heightMax: 13f, baseMin: 4f, baseMax: 7f, ref seed);
-                BuildMountainRow(field, side, lane * 14f, step: 15f, heightMin: 14f, heightMax: 22f, baseMin: 7f, baseMax: 10f, ref seed);
+                BuildMountainRow(field, side, lane * 9f, step: 11f, heightMin: 7f, heightMax: 12f, baseMin: 4.5f, baseMax: 7.5f, ref seed);
+                BuildMountainRow(field, side, lane * 14f, step: 15f, heightMin: 13f, heightMax: 18f, baseMin: 8f, baseMax: 11f, ref seed);
             }
         }
 
@@ -273,10 +273,13 @@ namespace Mammoth.EditorTools
                 go.transform.rotation = Quaternion.Euler(0, (float)rng.NextDouble() * 360f, 0);
                 go.transform.localScale = new Vector3(baseScale, heightScale, baseScale);
 
-                int peaks = rng.NextDouble() < 0.35 ? 3 : 2;
+                // 3-peak ridges give each individual peak a narrower angular
+                // share of the base ring (1/3 vs 1/2), making them more prone to
+                // a thin, needle-like silhouette at a grazing angle — kept rare.
+                int peaks = rng.NextDouble() < 0.12 ? 3 : 2;
                 var mf = go.AddComponent<MeshFilter>();
                 var mr = go.AddComponent<MeshRenderer>();
-                mf.sharedMesh = LowPolyMeshUtil.BuildMountainRidge(seed * 71 + 13, peaks: peaks, baseJitter: 0.08f, snowLine: 0.55f);
+                mf.sharedMesh = LowPolyMeshUtil.BuildMountainRidge(seed * 71 + 13, peaks: peaks, baseJitter: 0.05f, snowLine: 0.55f);
                 var rockColor = Color.Lerp(MountainPastel1, MountainPastel2, MountainTints[rng.Next(MountainTints.Length)]);
                 mr.sharedMaterials = new[] { MakeMaterial(rockColor), MakeMaterial(SnowCream) };
 
