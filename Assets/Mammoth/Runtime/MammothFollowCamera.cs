@@ -46,9 +46,12 @@ namespace Mammoth
                     look = new Vector3(p.x + 0.6f, ground + 2.4f, p.z + 7f);
                     break;
                 case MammothCameraMode.Celebrate:
-                    celebrateAngle = Mathf.MoveTowards(celebrateAngle, 150f, Time.deltaTime * 35f);
-                    var dir = Quaternion.Euler(0f, celebrateAngle, 0f) * new Vector3(0f, 0f, -7f);
-                    pos = new Vector3(p.x, ground + 3f, p.z) + dir;
+                    // Swing round to a side view: the raised trunk and the
+                    // squirrel read clearly, with the campfire, tent and
+                    // neighbours on the far side of the road behind them.
+                    celebrateAngle = Mathf.MoveTowards(celebrateAngle, 100f, Time.deltaTime * 30f);
+                    var dir = Quaternion.Euler(0f, celebrateAngle, 0f) * new Vector3(0f, 0f, -6.5f);
+                    pos = new Vector3(p.x, ground + 2.6f, p.z) + dir;
                     look = new Vector3(p.x, ground + 1.6f, p.z);
                     break;
                 default:
@@ -84,6 +87,9 @@ namespace Mammoth
         {
             if (target == null) return;
             Compute(out var goal, out var look);
+            // A big jump (new run, preview, restart) snaps instead of gliding
+            // through the mountain on the way.
+            if ((goal - transform.position).sqrMagnitude > 30f * 30f) { transform.position = goal; transform.LookAt(look); }
             float k = 1f - Mathf.Exp(-smoothing * Time.deltaTime);
             transform.position = Vector3.Lerp(transform.position, goal, k);
             KeepOutOfIcebergs();

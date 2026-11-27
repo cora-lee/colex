@@ -38,6 +38,16 @@ namespace Mammoth
         [Tooltip("Kept for older scenes; the game flow decides the input source now.")]
         public bool keyboardFallback = true;
 
+        [Header("Terrain patches")]
+        [Tooltip("Stretches of road (by distance) with mud or slick ice. Set by the scene builder.")]
+        public MammothTerrainSegment[] terrain = System.Array.Empty<MammothTerrainSegment>();
+        [Tooltip("Travel speed multiplier while inside a Mud segment.")]
+        public float mudSpeedFactor = 0.45f;
+        [Tooltip("Sideways slide amplitude (Unity units) while on slick ice.")]
+        public float iceSlideAmplitude = 0.55f;
+        [Tooltip("How fast the ice slide sways.")]
+        public float iceSlideFrequency = 1.7f;
+
         [Header("Steering (tilt)")]
         [Tooltip("Hand-height difference below this is treated as level (no sideways motion).")]
         public float steerDeadzone = 0.2f;
@@ -83,6 +93,9 @@ namespace Mammoth
         public float Steer { get; private set; }
         public bool Airborne => cfg != null && motion.Airborne(clock, cfg);
         public float GroundY => MammothRoute.Height(distance);
+        public MammothTerrainType CurrentTerrain { get; private set; }
+        /// <summary>Sideways position including the ice slide.</summary>
+        public float EffectiveLateral => Mathf.Clamp(lateral + iceDrift, -MammothRoute.SteerLimit, MammothRoute.SteerLimit);
 
         public event Action<MammothReward> OnCollected;
         public event Action OnEmptyGrab;
@@ -105,6 +118,7 @@ namespace Mammoth
         float distance;
         float lateral;
         float lateralVel;
+        float iceDrift;
         float keySpeed;
         double clock;
         double grabOpenUntil = -1;
@@ -146,18 +160,22 @@ namespace Mammoth
             distance = MammothRoute.StartZ;
             lateral = 0f;
             lateralVel = 0f;
+            iceDrift = 0f;
             Score = 0; Acorns = 0; Collisions = 0; Jumps = 0; GrabAttempts = 0;
             collectedIds.Clear();
             motion = new MammothMotion();
             grabOpen = false;
             slowUntil = -1; protectUntil = -1;
+            keySpeed = Mathf.Lerp(cfg.min_speed, cfg.max_speed, 0.4f);
             foreach (var o in MammothObstacle.Active) o.hitThisPass = false;
-            keySpeed = cfg.min_speed;
             SetTrunkRaised(false);
             foreach (var r in FindObjectsByType<MammothReward>(FindObjectsInactive.Include, FindObjectsSortMode.None))
                 if (!r.practice) r.ResetForRun();
             ApplyPose(0f);
         }
+
+        /// <summary>Editor UI preview only: jump to a distance on the route.</summary>
+        public void DebugJumpTo(float z) { distance = z; ApplyPose(0f); }
 
         /// <summary>Centers the mammoth sideways (tutorial start).</summary>
         public void Recenter() { lateral = 0f; lateralVel = 0f; }
@@ -179,7 +197,13 @@ namespace Mammoth
             if (!clockRunning) lateralVel = 0f;
             lateral = Mathf.Clamp(lateral + lateralVel * dt * worldScale, -MammothRoute.SteerLimit, MammothRoute.SteerLimit);
 
+            CurrentTerrain = SampleTerrain(distance);
+            float driftTarget = CurrentTerrain == MammothTerrainType.Ice && clockRunning && !holdPosition
+                ? Mathf.Sin((float)clock * iceSlideFrequency + distance * 0.05f) * iceSlideAmplitude : 0f;
+            iceDrift += (driftTarget - iceDrift) * (1f - Mathf.Exp(-4f * dt));
+
             float mult = MammothRoute.SpeedMultiplier(distance);
+            if (CurrentTerrain == MammothTerrainType.Mud) mult *= mudSpeedFactor;
             if (clock < slowUntil) mult *= collisionSlowFactor;
             ActualSpeed = (moveForward && !holdPosition) ? speedIn * mult : 0f;
             distance += ActualSpeed * worldScale * dt;
@@ -188,6 +212,13 @@ namespace Mammoth
             UpdateReach();
             UpdateGrabWindow();
             ApplyPose(dt);
+        }
+
+        MammothTerrainType SampleTerrain(float z)
+        {
+            for (int i = 0; i < terrain.Length; i++)
+                if (terrain[i].Contains(z)) return terrain[i].type;
+            return MammothTerrainType.Normal;
         }
 
         void ReadInput(out float speed, out float steer, out float throttle)
@@ -274,7 +305,7 @@ namespace Mammoth
         {
             foreach (var o in MammothObstacle.Active)
             {
-                float dx = o.transform.position.x - lateral;
+                float dx = o.transform.position.x - EffectiveLateral;
                 float dz = o.transform.position.z - distance;
                 bool touching = dx * dx + dz * dz < (o.radius + bodyRadius) * (o.radius + bodyRadius);
                 if (!touching) { if (dz < -o.radius - 2f) o.hitThisPass = false; continue; }
@@ -325,7 +356,7 @@ namespace Mammoth
         {
             float jumpY = cfg != null ? motion.JumpOffset(clock, cfg) * worldScale : 0f;
             float ground = MammothRoute.Height(distance);
-            transform.position = new Vector3(lateral, ground + jumpY, distance);
+            transform.position = new Vector3(EffectiveLateral, ground + jumpY, distance);
 
             float pitch = -Mathf.Atan(MammothRoute.Slope(distance)) * Mathf.Rad2Deg;
             float yaw = Mathf.Clamp(lateralVel * 5f, -22f, 22f);

@@ -67,7 +67,7 @@ namespace Mammoth
 
         static readonly Color Ink = new Color(0.27f, 0.21f, 0.30f);
         static readonly Color InkSoft = new Color(0.45f, 0.39f, 0.48f);
-        static readonly Color Cream = new Color(1f, 0.985f, 0.96f, 0.96f);
+        static readonly Color Cream = new Color(1f, 0.985f, 0.96f, 1f);
         static readonly Color Acorn = new Color(0.66f, 0.45f, 0.26f);
         static readonly Color Mint = new Color(0.47f, 0.78f, 0.66f);
         static readonly Color Sky = new Color(0.52f, 0.71f, 0.93f);
@@ -252,6 +252,28 @@ namespace Mammoth
                 controller.Wobble(1.2f);
             }
             SetCamera(MammothCameraMode.Celebrate);
+        }
+
+        /// <summary>Editor-only UI check: jump straight to a screen while playing.
+        /// Gameplay screens use keyboard mode so tracking loss can't pause them.</summary>
+        public void DebugPreview(MammothFlowState s)
+        {
+            switch (s)
+            {
+                case MammothFlowState.Home: EnterHome(); break;
+                case MammothFlowState.Rules: EnterRules(true); break;
+                case MammothFlowState.PracticeSelect: State = MammothFlowState.PracticeSelect; break;
+                case MammothFlowState.Setup: UseKeyboard(false); EnterSetup(false); break;
+                case MammothFlowState.Tutorial: UseKeyboard(true); EnterTutorial(); break;
+                case MammothFlowState.Ready: UseKeyboard(true); EnterReady(); break;
+                case MammothFlowState.Countdown: UseKeyboard(true); EnterCountdown(false); break;
+                case MammothFlowState.Playing:
+                    UseKeyboard(true); EnterCountdown(false); EnterPlaying();
+                    controller.DebugJumpTo(52f); AddToast("+10", Mint, 3f); break;
+                case MammothFlowState.Paused: UseKeyboard(true); EnterCountdown(false); EnterPlaying(); controller.DebugJumpTo(120f); EnterPause(false); break;
+                case MammothFlowState.Ending: UseKeyboard(true); EnterCountdown(false); EnterPlaying(); controller.DebugJumpTo(MammothRoute.FinishZ); EnterEnding(); break;
+                case MammothFlowState.Results: UseKeyboard(true); EnterCountdown(false); EnterPlaying(); controller.DebugJumpTo(MammothRoute.FinishZ); EnterEnding(); State = MammothFlowState.Results; break;
+            }
         }
 
         // =====================================================================
@@ -517,8 +539,10 @@ namespace Mammoth
                 case MammothFlowState.Ending: DrawEnding(); break;
                 case MammothFlowState.Results: DrawResults(); break;
             }
-            if (State != MammothFlowState.Setup && !keyboardMode) DrawCameraPreview();
-            DrawToasts();
+            bool previewHere = State == MammothFlowState.Home || State == MammothFlowState.Tutorial || State == MammothFlowState.Practice
+                || State == MammothFlowState.Ready || State == MammothFlowState.Countdown || State == MammothFlowState.Playing || State == MammothFlowState.Paused;
+            if (previewHere && !keyboardMode) DrawCameraPreview();
+            if (State == MammothFlowState.Playing || State == MammothFlowState.Tutorial || State == MammothFlowState.Practice) DrawToasts();
             GUI.matrix = Matrix4x4.identity;
         }
 
@@ -668,6 +692,8 @@ namespace Mammoth
                 // Mirrored preview: left on screen is the player's left region.
                 GUI.DrawTextureWithTexCoords(inner, tex, vflip ? new Rect(1f, 1f, -1f, -1f) : new Rect(1f, 0f, -1f, 1f));
             }
+            else
+                Label(new Rect(preview.x, preview.y + preview.height * 0.5f - 40f, preview.width, 50f), "No camera image yet", centerStyle.WithSize(20).Bold(), new Color(1f, 1f, 1f, 0.75f));
 
             var s = receiver != null ? receiver.State : null;
             string[] roles = { "Speed", "Direction", "Jump + Trunk" };
@@ -901,6 +927,15 @@ namespace Mammoth
                 }
             }
             else Label(new Rect(right.x + 140f, right.y + 64f, 110f, 26f), "keyboard", smallStyle.Right());
+
+            // Terrain badge under the left card
+            if (controller.CurrentTerrain != MammothTerrainType.Normal)
+            {
+                bool ice = controller.CurrentTerrain == MammothTerrainType.Ice;
+                var tb = new Rect(24f, 150f, 300f, 40f);
+                Panel(tb, ice ? new Color(0.55f, 0.82f, 0.95f, 0.95f) : new Color(0.62f, 0.47f, 0.33f, 0.95f));
+                Label(tb, ice ? "Slick ice: you'll slide a little" : "Mud: slow going", centerStyle.WithSize(17).Bold(), Color.white);
+            }
 
             // Next necessary prompt
             if (State == MammothFlowState.Playing)

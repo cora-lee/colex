@@ -16,7 +16,9 @@ namespace Mammoth
         public const float SummitStartZ = 240f;
         public const float SummitEndZ = 280f;
         public const float CampStartZ = 500f;
-        public const float FinishZ = 502f;
+        public const float ArchZ = 502f;
+        /// <summary>The run ends a little past the arch, inside the campsite by the fire.</summary>
+        public const float FinishZ = 512f;
         public const float EndZ = 540f;
 
         /// <summary>Half width of the walkable road; the mammoth's center stays inside.</summary>

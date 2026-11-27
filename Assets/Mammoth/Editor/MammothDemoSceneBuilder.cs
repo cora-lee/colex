@@ -29,6 +29,8 @@ namespace Mammoth.EditorTools
         static readonly Color RoadSnow = new Color(0.60f, 0.74f, 0.92f);
         static readonly Color RoadEarth = new Color(0.86f, 0.74f, 0.58f);
         static readonly Color SnowWhite = new Color(0.97f, 0.98f, 1f);
+        static readonly Color IceSlick = new Color(0.80f, 0.97f, 1f);
+        static readonly Color MudColor = new Color(0.42f, 0.32f, 0.22f);
         static readonly Color Ice2 = new Color(0.50f, 0.70f, 0.90f);
         static readonly Color Ice3 = new Color(0.40f, 0.62f, 0.86f);
         static readonly Color RockLilac = new Color(0.74f, 0.70f, 0.82f);
@@ -114,6 +116,7 @@ namespace Mammoth.EditorTools
             controller.grabOrigin = grabPoint;
             controller.squirrel = squirrel;
             controller.trunk = trunkPivot;
+            controller.terrain = BuildTerrainZones();
             var hud = systems.AddComponent<MammothDebugHud>();
             hud.receiver = receiver;
             hud.controller = controller;
@@ -283,6 +286,93 @@ namespace Mammoth.EditorTools
             go.transform.SetParent(parent.transform);
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
             go.AddComponent<MeshRenderer>().sharedMaterial = MakeMaterial(color);
+        }
+
+        /// <summary>Slick-ice (sideways slide) and mud (slowdown) patches on the
+        /// road, alternating like before. None on the summit or at camp.</summary>
+        static readonly (float z, MammothTerrainType type)[] TerrainPatches =
+        {
+            (50f, MammothTerrainType.Ice), (95f, MammothTerrainType.Mud),
+            (140f, MammothTerrainType.Ice), (185f, MammothTerrainType.Mud),
+            (300f, MammothTerrainType.Ice), (345f, MammothTerrainType.Mud),
+            (390f, MammothTerrainType.Ice), (435f, MammothTerrainType.Mud),
+        };
+
+        static MammothTerrainSegment[] BuildTerrainZones()
+        {
+            var group = new GameObject("Terrain Zones");
+            var segs = new List<MammothTerrainSegment>();
+            const float len = 20f, fadeLen = 3f;
+            const int fadeSteps = 4;
+            foreach (var t in TerrainPatches)
+            {
+                bool ice = t.type == MammothTerrainType.Ice;
+                segs.Add(new MammothTerrainSegment { startZ = t.z, endZ = t.z + len, type = t.type });
+                Color road = t.z < SnowEndZ ? RoadSnow : RoadEarth;
+                Color patchColor = ice ? IceSlick : MudColor;
+                var patchMat = ice ? MakeSlickMaterial(IceSlick) : MakeMaterial(MudColor);
+                RoadPatch(group, ice ? "Ice Slick" : "Mud Patch", t.z, t.z + len, 0.07f, patchMat);
+                // Short stepped fades so the patch eases into the road color.
+                float step = fadeLen / fadeSteps;
+                for (int i = 0; i < fadeSteps; i++)
+                {
+                    float f = (i + 0.5f) / fadeSteps;
+                    RoadPatch(group, "Terrain Fade", t.z - fadeLen + i * step, t.z - fadeLen + (i + 1) * step + 0.05f, 0.065f, MakeMaterial(Color.Lerp(road, patchColor, f)));
+                    RoadPatch(group, "Terrain Fade", t.z + len + i * step - 0.05f, t.z + len + (i + 1) * step, 0.065f, MakeMaterial(Color.Lerp(patchColor, road, f)));
+                }
+            }
+            return segs.ToArray();
+        }
+
+        /// <summary>A flat strip across the road width that follows the slope.</summary>
+        static void RoadPatch(GameObject parent, string name, float z0, float z1, float lift, Material mat)
+        {
+            float half = MammothRoute.RoadHalfWidth - 0.05f;
+            int rows = Mathf.Max(2, Mathf.CeilToInt((z1 - z0) / 1f) + 1);
+            var verts = new Vector3[rows * 2];
+            for (int r = 0; r < rows; r++)
+            {
+                float z = Mathf.Lerp(z0, z1, r / (float)(rows - 1));
+                float y = MammothRoute.Height(z) + lift;
+                verts[r * 2] = new Vector3(-half, y, z);
+                verts[r * 2 + 1] = new Vector3(half, y, z);
+            }
+            var tris = new List<int>();
+            for (int r = 0; r < rows - 1; r++)
+            {
+                int a = r * 2, b = a + 1, d = a + 2, e = a + 3;
+                tris.AddRange(new[] { a, d, b, b, d, e });
+            }
+            var mesh = new Mesh { name = name };
+            mesh.vertices = verts;
+            mesh.triangles = tris.ToArray();
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            var go = new GameObject(name);
+            go.transform.SetParent(parent.transform);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            go.AddComponent<MeshRenderer>().sharedMaterial = mat;
+        }
+
+        static readonly Dictionary<Color, Material> SlickMaterials = new Dictionary<Color, Material>();
+
+        static Material MakeSlickMaterial(Color c)
+        {
+            if (SlickMaterials.TryGetValue(c, out var m) && m != null) return m;
+            string name = "Mammoth Slick " + ColorUtility.ToHtmlStringRGB(c);
+            string path = "Assets/Mammoth/Materials/" + name + ".mat";
+            m = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (m == null)
+            {
+                var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                m = new Material(shader) { name = name, color = c };
+                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.85f);
+                if (m.HasProperty("_Glossiness")) m.SetFloat("_Glossiness", 0.85f);
+                System.IO.Directory.CreateDirectory("Assets/Mammoth/Materials");
+                AssetDatabase.CreateAsset(m, path);
+            }
+            SlickMaterials[c] = m;
+            return m;
         }
 
         /// <summary>Soft snow mounds (pebbles on grass) lining both road edges, so
@@ -601,12 +691,15 @@ namespace Mammoth.EditorTools
                 }
 
             // Finish arch at the campsite entrance.
-            float fz = MammothRoute.FinishZ;
+            float fz = MammothRoute.ArchZ;
             float fy = MammothRoute.Height(fz);
             Part(group, PrimitiveType.Cylinder, "Arch Post L", new Vector3(-4.7f, fy + 2.1f, fz), new Vector3(0.22f, 2.1f, 0.22f), Wood, flat: false);
             Part(group, PrimitiveType.Cylinder, "Arch Post R", new Vector3(4.7f, fy + 2.1f, fz), new Vector3(0.22f, 2.1f, 0.22f), Wood, flat: false);
             Part(group, PrimitiveType.Cube, "Arch Banner", new Vector3(0f, fy + 3.85f, fz), new Vector3(9.8f, 0.9f, 0.14f), SignBoard, flat: true);
             Text(group.transform, "Campsite", new Vector3(0f, fy + 3.85f, fz - 0.09f), 0.22f, 64);
+            // Readable from inside the camp too (the ending camera looks back at it).
+            var back = Text(group.transform, "Welcome", new Vector3(0f, fy + 3.85f, fz + 0.09f), 0.22f, 64);
+            back.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
             for (int i = 0; i < 7; i++)
             {
                 float x = -4.2f + i * 1.4f;
@@ -623,7 +716,7 @@ namespace Mammoth.EditorTools
             Text(parent, text, new Vector3(pos.x, y + 1.6f, pos.z - 0.07f), 0.09f, 64);
         }
 
-        static void Text(Transform parent, string text, Vector3 pos, float charSize, int fontSize)
+        static GameObject Text(Transform parent, string text, Vector3 pos, float charSize, int fontSize)
         {
             var go = new GameObject("Text " + text.Replace('\n', ' '));
             go.transform.SetParent(parent);
@@ -639,6 +732,7 @@ namespace Mammoth.EditorTools
             var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             tm.font = font;
             go.GetComponent<MeshRenderer>().sharedMaterial = font.material;
+            return go;
         }
 
         static void BuildCampsite()

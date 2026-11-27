@@ -18,6 +18,18 @@ namespace Mammoth.EditorTools
         [MenuItem("Mammoth/Preview Route/Downhill (z 420)")] static void P5() => Place(420f, 0f);
         [MenuItem("Mammoth/Preview Route/Campsite (z 498)")] static void P6() => Place(498f, 0f);
 
+        [MenuItem("Mammoth/Preview Route/Ending camera")]
+        static void PEnd()
+        {
+            Place(MammothRoute.FinishZ, 0f);
+            var cam = Camera.main;
+            float z = MammothRoute.FinishZ, g = MammothRoute.Height(z);
+            var dir = Quaternion.Euler(0f, 100f, 0f) * new Vector3(0f, 0f, -6.5f);
+            cam.transform.position = new Vector3(0f, g + 2.6f, z) + dir;
+            cam.transform.LookAt(new Vector3(0f, g + 1.6f, z));
+            UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
+        }
+
         static void Place(float z, float x)
         {
             var mammoth = Object.FindFirstObjectByType<MammothController>();
