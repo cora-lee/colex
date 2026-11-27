@@ -1377,16 +1377,23 @@ namespace Mammoth
             if (cam == null || controller == null) return;
             if (State == MammothFlowState.Countdown || Time.unscaledTime - goStart < 0.9f) return;
             // Only the next high acorn ahead, so tags never pile up on each other.
-            MammothReward next = null;
-            float best = float.MaxValue;
+            // The nearest thing ahead that needs a jump: a high acorn or a log.
+            Transform next = null;
+            float best = float.MaxValue, lift = 0.7f;
             foreach (var r in MammothReward.Active)
             {
                 if (!r.high || r.practice) continue;
                 float d = r.transform.position.z - controller.Distance;
-                if (d > -0.5f && d < 34f && d < best) { best = d; next = r; }
+                if (d > -0.5f && d < 34f && d < best) { best = d; next = r.transform; lift = 0.7f; }
+            }
+            foreach (var o in MammothObstacle.Active)
+            {
+                if (!o.jumpOver) continue;
+                float d = o.transform.position.z - controller.Distance;
+                if (d > 0.5f && d < 34f && d < best) { best = d; next = o.transform; lift = 1.4f; }
             }
             if (next == null) return;
-            Vector3 sp = cam.WorldToScreenPoint(next.transform.position + Vector3.up * 0.7f);
+            Vector3 sp = cam.WorldToScreenPoint(next.position + Vector3.up * lift);
             if (sp.z <= 0f) return;
             float gx = sp.x / uiScale, gy = (Screen.height - sp.y) / uiScale;
             float sc = Mathf.Lerp(0.75f, 1.05f, Mathf.InverseLerp(34f, 6f, best));
@@ -1411,6 +1418,12 @@ namespace Mammoth
 
         string HighAcornPrompt(float z)
         {
+            foreach (var o in MammothObstacle.Active)
+            {
+                if (!o.jumpOver) continue;
+                float dz = o.transform.position.z - z;
+                if (dz > 4f && dz < 26f) return "Log across the path: jump over it!";
+            }
             foreach (var r in MammothReward.Active)
             {
                 if (!r.high || r.practice) continue;

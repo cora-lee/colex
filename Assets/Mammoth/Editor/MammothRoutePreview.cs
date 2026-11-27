@@ -12,6 +12,7 @@ namespace Mammoth.EditorTools
     {
         [MenuItem("Mammoth/Preview Route/Start (z 0)")] static void P0() => Place(0f, 0f);
         [MenuItem("Mammoth/Preview Route/High acorns (z 66)")] static void P1() => Place(66f, -1f);
+        [MenuItem("Mammoth/Preview Route/Jump log (z 112)")] static void PLog() => Place(112f, 0f);
         [MenuItem("Mammoth/Preview Route/Steep uphill (z 170)")] static void P2() => Place(170f, 0f);
         [MenuItem("Mammoth/Preview Route/Summit (z 255)")] static void P3() => Place(255f, 0f);
         [MenuItem("Mammoth/Preview Route/Snow to grass (z 325)")] static void P4() => Place(325f, 1f);

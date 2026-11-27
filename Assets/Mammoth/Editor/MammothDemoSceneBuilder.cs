@@ -155,6 +155,7 @@ namespace Mammoth.EditorTools
             }
 
             BuildRewards(cfg, out var practiceTemplate);
+            BuildJumpLogs();
 
             var flow = systems.AddComponent<MammothGameFlow>();
             flow.receiver = receiver;
@@ -777,6 +778,42 @@ namespace Mammoth.EditorTools
                 float x = -4.2f + i * 1.4f;
                 var flag = Part(group, PrimitiveType.Cube, "Bunting", new Vector3(x, fy + 3.2f, fz - 0.05f), new Vector3(0.5f, 0.42f, 0.03f), flagCols[i % flagCols.Length], flat: true);
                 flag.transform.localRotation = Quaternion.Euler(0f, 0f, 45f);
+            }
+        }
+
+        /// <summary>Fallen logs lying across the whole road: the only way past
+        /// is a jump. Placed on gentle ground, away from acorns, ice and mud.</summary>
+        static readonly float[] JumpLogZ = { 120f, 228f, 288f, 426f, 474f };
+
+        static void BuildJumpLogs()
+        {
+            var group = new GameObject("Jump Logs");
+            Color bark = new Color(0.50f, 0.34f, 0.22f), ring = new Color(0.86f, 0.70f, 0.48f);
+            for (int i = 0; i < JumpLogZ.Length; i++)
+            {
+                float z = JumpLogZ[i];
+                float y = MammothRoute.Height(z);
+                float slope = -Mathf.Atan(MammothRoute.Slope(z)) * Mathf.Rad2Deg;
+                var log = new GameObject("Jump Log");
+                log.transform.SetParent(group.transform);
+                log.transform.position = new Vector3(0f, y, z);
+                log.transform.rotation = Quaternion.Euler(slope, 0f, 0f);
+                float len = MammothRoute.RoadHalfWidth * 2f + 1.6f;
+                var trunk = Part(log, PrimitiveType.Cylinder, "Log", new Vector3(0f, 0.36f, 0f), new Vector3(0.72f, len * 0.5f, 0.72f), bark, flat: true);
+                trunk.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+                foreach (int s in new[] { -1, 1 })
+                {
+                    var end = Part(log, PrimitiveType.Cylinder, "Log End", new Vector3(s * len * 0.5f, 0.36f, 0f), new Vector3(0.62f, 0.02f, 0.62f), ring, flat: true);
+                    end.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+                }
+                // snow lying along the top and a stubby broken branch
+                var snow = Part(log, PrimitiveType.Sphere, "Log Snow", new Vector3(0f, 0.68f, 0f), new Vector3(len * 0.92f, 0.16f, 0.48f), SnowWhite, flat: true);
+                var branch = Part(log, PrimitiveType.Cylinder, "Log Branch", new Vector3(len * 0.18f, 0.78f, 0.06f), new Vector3(0.14f, 0.28f, 0.14f), bark, flat: true);
+                branch.transform.localRotation = Quaternion.Euler(0f, 0f, -28f);
+                var obstacle = log.AddComponent<MammothObstacle>();
+                obstacle.jumpOver = true;
+                obstacle.halfDepth = 0.4f;
+                obstacle.radius = len * 0.5f;
             }
         }
 

@@ -128,6 +128,8 @@ namespace Mammoth
         double slowUntil = -1;
         double protectUntil = -1;
         double sitUntil = -1;
+        double jumpEndsAt = -1;
+        double lastGrabClock = -10;
         float grabPoseUntil = -1f;
 
         /// <summary>Seconds of play in this run (stops while paused or finished).</summary>
@@ -331,6 +333,10 @@ namespace Mammoth
             if (motion.Airborne(clock, cfg)) return; // doc: reject, never queue
             Jumps++;
             motion.StartJump(clock);
+            jumpEndsAt = clock + cfg.jump_duration;
+            // A clap just before take-off still counts: keep the trunk ready
+            // for the whole jump.
+            if (clock - lastGrabClock < 0.45) { grabOpen = true; grabOpenUntil = Math.Max(grabOpenUntil, jumpEndsAt); }
             OnJumped?.Invoke();
         }
 
@@ -341,6 +347,10 @@ namespace Mammoth
             LastGrabTime = Time.time;
             grabOpen = true;
             grabOpenUntil = clock + grabWindow;
+            lastGrabClock = clock;
+            // Clapping in the air keeps the trunk ready until landing, so a
+            // jump and a clap together collect a high acorn.
+            if (motion.Airborne(clock, cfg)) grabOpenUntil = Math.Max(grabOpenUntil, jumpEndsAt);
             grabPoseUntil = Mathf.Max(grabPoseUntil, Time.time + 0.3f);
             if (TryCollect()) return;
         }
@@ -378,11 +388,15 @@ namespace Mammoth
 
         void CheckCollisions()
         {
+            bool air = cfg != null && motion.Airborne(clock, cfg);
             foreach (var o in MammothObstacle.Active)
             {
                 float dx = o.transform.position.x - EffectiveLateral;
                 float dz = o.transform.position.z - distance;
-                bool touching = dx * dx + dz * dz < (o.radius + bodyRadius) * (o.radius + bodyRadius);
+                bool touching = o.jumpOver
+                    ? Mathf.Abs(dz) < o.halfDepth + bodyRadius && !air   // across the road: only a jump clears it
+                    : dx * dx + dz * dz < (o.radius + bodyRadius) * (o.radius + bodyRadius);
+                if (o.jumpOver && !touching && dz < -o.halfDepth - bodyRadius) o.hitThisPass = true; // cleared it
                 if (!touching) { if (dz < -o.radius - 2f) o.hitThisPass = false; continue; }
                 // Continuous contact never deducts again; pass through it.
                 if (o.hitThisPass || clock < protectUntil) continue;
