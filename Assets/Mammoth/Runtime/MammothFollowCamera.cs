@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace Mammoth
 {
-    public enum MammothCameraMode { Follow, Showcase, Celebrate }
+    public enum MammothCameraMode { Follow, Showcase, Celebrate, Front }
 
     /// <summary>
     /// Fixed rear elevated follow camera from the design doc. It follows the
@@ -53,6 +53,16 @@ namespace Mammoth
                     var dir = Quaternion.Euler(0f, celebrateAngle, 0f) * new Vector3(0f, 0f, -6.5f);
                     pos = new Vector3(p.x, ground + 2.6f, p.z) + dir;
                     look = new Vector3(p.x, ground + 1.6f, p.z);
+                    break;
+                case MammothCameraMode.Front:
+                    // Intro demo: walks backwards ahead of the mammoth, a little
+                    // off to one side, held on the road centre so swerves show.
+                    {
+                        float fz = p.z + 9.5f;
+                        float fg = Mathf.Max(MammothRoute.Height(fz), ground);
+                        pos = new Vector3(0.9f, fg + 2.3f, fz);
+                        look = new Vector3(p.x * 0.3f, ground + 1.7f, p.z);
+                    }
                     break;
                 default:
                     celebrateAngle = 0f;

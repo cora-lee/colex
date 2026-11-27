@@ -219,7 +219,7 @@ namespace Mammoth
             introJumped = false;
             if (controller != null) { controller.ResetRun(); controller.Recenter(); }
             SetControl(true, true, false);
-            SetCamera(MammothCameraMode.Follow);
+            SetCamera(MammothCameraMode.Front);
             if (followCamera != null) followCamera.Snap();
             if (introRider == null) introRider = FindFirstObjectByType<MammothRider>();
             if (introRider != null) introRider.drama = 1.9f;
@@ -287,9 +287,10 @@ namespace Mammoth
             {
                 float pulse = 1f + Mathf.Sin(Time.unscaledTime * 8f) * 0.08f;
                 float size = 120f * pulse;
-                float cx = view.x * 0.5f + b.dir * 300f;
+                // Seen from the front, the mammoth's left is the screen's right.
+                float cx = view.x * 0.5f - b.dir * 330f;
                 var r = new Rect(cx - size * 0.5f, view.y * 0.42f - size * 0.5f, size, size);
-                BigBadge(r.center, size, Sky, b.dir < 0 ? "<" : ">", 0.5f, a);
+                BigBadge(r.center, size, Sky, b.dir < 0 ? ">" : "<", 0.5f, a);
             }
             else if (b.dir == 2)
             {
